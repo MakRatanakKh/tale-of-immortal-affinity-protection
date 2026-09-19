@@ -1,3 +1,6 @@
+# The TOI packer reads this file too; never copy Git internals into a game mod.
+.git/
+
 # Build outputs
 bin/
 obj/
