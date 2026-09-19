@@ -1,5 +1,4 @@
 using System;
-using System.Reflection;
 using HarmonyLib;
 using MelonLoader;
 using Il2Cpp;
@@ -108,7 +107,8 @@ namespace MOD_AffinityProtection
                 if (world == null || world.playerUnit == null)
                     return false;
                 var player = world.playerUnit;
-                string playerId = player.GetUnitId();
+                // UnitInfoData.unitID is present in this exact assembly's inventory.
+                string playerId = player.data.unitData.unitID;
                 if (string.IsNullOrEmpty(playerId))
                     return false;
 
