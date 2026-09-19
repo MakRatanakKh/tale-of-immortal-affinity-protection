@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <!-- Copy this file to Local.props and replace with your local installation path. -->
+    <GameDir>C:\path\to\TaleOfImmortal</GameDir>
+  </PropertyGroup>
+</Project>
