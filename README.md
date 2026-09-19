@@ -1,26 +1,38 @@
 # Tale of Immortal — Partner Affinity Protection
 
-**Status: research / scaffold; no functional affinity patch has been implemented or tested yet.**
+**Status: experimental source prototype committed; NOT compiled, packaged, or tested in-game.** Do not use on your only save.
 
-Goal: prevent decreases in *both directions* of affinity between the player and their current spouse or cultivation partners (道侣), while allowing gains normally and leaving unrelated NPC relationships untouched. Removing a relationship should not be blocked; we need to confirm how the game represents that operation before deciding how to handle its affinity reset.
+Goal: prevent affinity losses in either direction between the player and their current spouse or cultivation partner (道侣), while allowing gains and leaving unrelated NPC relationships unaffected.
 
-## Compatibility target
+## What is implemented
 
-- Tale of Immortal / 鬼谷八荒, user's Steam build `v1.2.113.259` (verify after any game update).
-- MelonLoader-based modding; project must use the actual dependencies and mod packaging expected by this game build. Not a BepInEx mod.
-- Existing local tools: .NET SDK 10.0.401, `just` 1.58.0, Tale of Immortal Tool 0.6.1.
+The uploaded assembly metadata identifies `DataUnit.RelationData.AddIntim(string,float,int,string,bool)` and `SetIntim(string,float)` as candidate writers. [`ModCode/ModMain/ModMain.cs`](ModCode/ModMain/ModMain.cs) contains two narrowly scoped Harmony prefixes for those exact overloads, with current `Married`/`Lover` relationship checks, explicit startup patch logs, and failure logging. No generic `MelonMod` loader entry point is used: this is an in-game Tale of Immortal mod project with `ModMain.Init()` and `Destroy()`.
 
-## Start here: inspect the affinity APIs
+**Limitations:** metadata alone cannot prove which paths the game actually executes. The current direct-set guard reads affinity via an integer-returning getter, so sub-integer losses may slip through. `ClearIntim` is intentionally untouched until breakup semantics are understood; some losses or relationship changes may bypass the current patches. No claim of working game behavior yet.
 
-The uploaded game DLL contains names such as `AddIntim`, `SetIntim`, `GetIntim`, and `GetRelation`, but these names alone do **not** establish their declaring types, exact overload signatures, or which affinity changes they actually handle. To extract the signatures locally without executing the game assembly, follow the [AffinityInspector instructions](tools/AffinityInspector/README.md). Send the resulting text report privately in chat; never commit the proprietary game DLL.
+## Your next step: build on Windows
 
-## Development plan
+From PowerShell in your existing local clone:
 
-1. Inspect the exact IL2CPP generated `Assembly-CSharp.dll` for the relationship type, player identity, and affinity mutation methods. Check all overloads and the annual-decay path.
-2. Implement a narrowly scoped Harmony patch with positive-gain pass-through, current spouse/partner filtering, and explicit logs for patch success/failure. Avoid patching by an unverified guessed method name.
-3. Build and package the mod using the game's actual mod loader format; confirm the patch-installed log in `Player.log`.
-4. Test on a **backup save**: annual decay, negative interaction, positive gift, unrelated NPC decrease, relationship removal, and reload.
+```powershell
+git pull origin main
+Copy-Item .\ModCode\Local.props.example .\ModCode\Local.props
+notepad .\ModCode\Local.props
+```
 
-See [`docs/verification.md`](docs/verification.md) for the discovery information needed before implementing a reliable patch.
+In Notepad, set `GameDir` to your Tale of Immortal installation directory (the folder containing `MelonLoader`) and save. Then run:
 
-No copyrighted game DLLs, save data, or personal local paths should be committed to this public repository.
+```powershell
+dotnet build .\ModCode\ModMain\ModMain.csproj -c Release
+```
+
+If build fails, paste its error output into chat. If it succeeds, follow [`docs/build-and-test.md`](docs/build-and-test.md) for packaging, logs and testing using a backup save. The packaging instructions have not yet been verified on this machine.
+
+## Project resources
+
+- [`docs/inventory-results.md`](docs/inventory-results.md): signatures/enum values extracted from the user's own assembly inventory.
+- [`docs/assembly-findings.md`](docs/assembly-findings.md): first-pass candidate names.
+- [`tools/AffinityInspector/`](tools/AffinityInspector/): offline metadata inventory helper, already used for this iteration.
+- [`docs/verification.md`](docs/verification.md): behavior acceptance checks.
+
+No proprietary game DLLs, saves, local paths or other private data should be committed to this public repository.
