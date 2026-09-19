@@ -12,18 +12,24 @@
   </PropertyGroup>
 
   <!-- MelonLoader versions lay out loader, Harmony, and generated IL2CPP binaries differently.
-       Prefer the IL2CPP core next to the game assembly; fall back to a recursive lookup. -->
+       Prefer the IL2CPP dependencies next to the game assembly, then search recursively.
+       Explicitly include Il2CppInterop.Runtime: it is not located in Managed on every
+       installation, so the Managed/Il2Cpp*.dll wildcard alone does not suffice. -->
   <ItemGroup Condition="'$(GameDir)' != ''">
     <_MelonLoaderDll Include="$(GameDir)/MelonLoader/**/MelonLoader.dll" />
     <_HarmonyDll Include="$(GameDir)/MelonLoader/**/0Harmony.dll;$(GameDir)/MelonLoader/**/HarmonyLib.dll;$(GameDir)/MelonLoader/**/HarmonyX.dll" />
     <_Il2CppMscorlib Include="$(GameAssemblyDir)/Il2Cppmscorlib.dll" Condition="Exists('$(GameAssemblyDir)/Il2Cppmscorlib.dll')" />
     <_Il2CppMscorlib Include="$(GameDir)/MelonLoader/**/Il2Cppmscorlib.dll" Condition="'@(_Il2CppMscorlib)' == ''" />
+    <_Il2CppInteropRuntime Include="$(GameAssemblyDir)/Il2CppInterop.Runtime.dll" Condition="Exists('$(GameAssemblyDir)/Il2CppInterop.Runtime.dll')" />
+    <_Il2CppInteropRuntime Include="$(GameDir)/MelonLoader/**/Il2CppInterop.Runtime.dll" Condition="'@(_Il2CppInteropRuntime)' == ''" />
 
     <Reference Include="$(GameAssemblyDir)/Assembly-CSharp*.dll"><Private>false</Private></Reference>
     <Reference Include="@(_MelonLoaderDll)"><Private>false</Private></Reference>
     <Reference Include="@(_HarmonyDll)"><Private>false</Private></Reference>
-    <!-- Required for IL2CPP types (CS0012: System.Object in Il2Cppmscorlib). -->
+    <!-- Required for generated IL2CPP System.Object (CS0012). -->
     <Reference Include="@(_Il2CppMscorlib)"><Private>false</Private></Reference>
+    <!-- Required for Il2CppObjectBase (CS0012). -->
+    <Reference Include="@(_Il2CppInteropRuntime)"><Private>false</Private></Reference>
     <Reference Include="$(GameDir)/MelonLoader/Managed/Il2Cpp*.dll"><Private>false</Private></Reference>
     <Reference Include="$(GameDir)/MelonLoader/Managed/Unhollower*.dll"><Private>false</Private></Reference>
     <Reference Include="$(GameDir)/MelonLoader/Managed/Unity*.dll"><Private>false</Private></Reference>
@@ -35,5 +41,6 @@
     <Error Condition="'$(GameDir)' != '' And '@(_MelonLoaderDll)' == ''" Text="MelonLoader.dll was not found under $(GameDir)/MelonLoader. Check your MelonLoader installation and run the DLL discovery command in docs/build-troubleshooting.md." />
     <Error Condition="'$(GameDir)' != '' And '@(_HarmonyDll)' == ''" Text="Harmony (0Harmony.dll, HarmonyLib.dll or HarmonyX.dll) was not found under $(GameDir)/MelonLoader. Run the DLL discovery command in docs/build-troubleshooting.md." />
     <Error Condition="'$(GameDir)' != '' And '@(_Il2CppMscorlib)' == ''" Text="Il2Cppmscorlib.dll was not found under $(GameDir)/MelonLoader. Run the DLL discovery command in docs/build-troubleshooting.md and share the path." />
+    <Error Condition="'$(GameDir)' != '' And '@(_Il2CppInteropRuntime)' == ''" Text="Il2CppInterop.Runtime.dll was not found under $(GameDir)/MelonLoader. Run the DLL discovery command in docs/build-troubleshooting.md and share the path." />
   </Target>
 </Project>
