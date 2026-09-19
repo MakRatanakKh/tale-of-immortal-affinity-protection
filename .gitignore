@@ -6,6 +6,9 @@ obj/
 *.dll
 *.pdb
 *.cache
+# In-game mod project manifest files are project source, not transient caches.
+!ModProject.cache
+!ModData.cache
 
 # Proprietary game files, loaders and runtime output
 Assembly-CSharp.dll
@@ -17,6 +20,7 @@ Player-prev.log
 *.save
 
 # Local user settings
+ModCode/Local.props
 .vs/
 .idea/
 .vscode/
