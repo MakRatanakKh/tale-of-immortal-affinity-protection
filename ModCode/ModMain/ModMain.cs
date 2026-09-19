@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using HarmonyLib;
 using MelonLoader;
 using Il2Cpp;
@@ -17,18 +18,16 @@ namespace MOD_AffinityProtection
 
         public void Init()
         {
-            // This must be the FIRST operation: the previous build logged only after
-            // reflection and Harmony setup, making early startup failures invisible.
-            // Unity logs go to Player.log, while MelonLogger goes to MelonLoader logs.
-            LogStatus("Init ENTERED (diagnostic build 0.1.1)");
+            // Must run before reflection or patch setup. In-game mod logging is not
+            // guaranteed to appear in Player.log or MelonLoader/Latest.log, so also
+            // write a best-effort diagnostic to the user's temporary directory.
+            LogStatus("Init ENTERED (diagnostic build 0.1.2)");
             try
             {
                 InitializePatches();
             }
             catch (Exception error)
             {
-                // Include failures from method resolution, type initialization, and
-                // even the normal error-reporting code in InitializePatches.
                 LogFailure("unhandled Init exception: " + error);
             }
         }
@@ -176,22 +175,31 @@ namespace MOD_AffinityProtection
                 LogStatus(action + " (total " + count + ")");
         }
 
-        // Log independently to both sinks. Failure in a logging subsystem must never
-        // prevent affinity processing or conceal a diagnostic from the other sink.
+        // Both sinks are best-effort. No UnityEngine.Debug dependency: the user's
+        // IL2CPP game assembly references Unity types but the Debug module was not
+        // referenced by this project (CS0234/CS0012 in diagnostic build 0.1.1).
         private static void LogStatus(string message)
         {
-            try { UnityEngine.Debug.Log("AffinityProtection: " + message); }
-            catch (Exception) { /* Unity logger unavailable; try MelonLogger. */ }
+            WriteDiagnostic(message);
             try { MelonLogger.Msg("AffinityProtection: " + message); }
-            catch (Exception) { /* No logging sink available at this point. */ }
+            catch (Exception) { /* Host logger unavailable at this stage. */ }
         }
 
         private static void LogFailure(string message)
         {
-            try { UnityEngine.Debug.LogError("AffinityProtection: " + message); }
-            catch (Exception) { /* Unity logger unavailable; try MelonLogger. */ }
+            WriteDiagnostic("ERROR: " + message);
             try { MelonLogger.Error("AffinityProtection: " + message); }
-            catch (Exception) { /* No logging sink available at this point. */ }
+            catch (Exception) { /* Host logger unavailable at this stage. */ }
+        }
+
+        private static void WriteDiagnostic(string message)
+        {
+            try
+            {
+                string path = Path.Combine(Path.GetTempPath(), "AffinityProtection-diagnostic.log");
+                File.AppendAllText(path, DateTime.Now.ToString("O") + " AffinityProtection: " + message + Environment.NewLine);
+            }
+            catch (Exception) { /* Logging must never alter game behavior. */ }
         }
     }
 }
