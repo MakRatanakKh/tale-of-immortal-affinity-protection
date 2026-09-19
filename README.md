@@ -10,6 +10,10 @@ Goal: prevent decreases in *both directions* of affinity between the player and 
 - MelonLoader-based modding; project must use the actual dependencies and mod packaging expected by this game build. Not a BepInEx mod.
 - Existing local tools: .NET SDK 10.0.401, `just` 1.58.0, Tale of Immortal Tool 0.6.1.
 
+## Start here: inspect the affinity APIs
+
+The uploaded game DLL contains names such as `AddIntim`, `SetIntim`, `GetIntim`, and `GetRelation`, but these names alone do **not** establish their declaring types, exact overload signatures, or which affinity changes they actually handle. To extract the signatures locally without executing the game assembly, follow the [AffinityInspector instructions](tools/AffinityInspector/README.md). Send the resulting text report privately in chat; never commit the proprietary game DLL.
+
 ## Development plan
 
 1. Inspect the exact IL2CPP generated `Assembly-CSharp.dll` for the relationship type, player identity, and affinity mutation methods. Check all overloads and the annual-decay path.
