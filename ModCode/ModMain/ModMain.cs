@@ -17,11 +17,30 @@ namespace MOD_AffinityProtection
 
         public void Init()
         {
-            if (harmony != null)
-                return;
+            // This must be the FIRST operation: the previous build logged only after
+            // reflection and Harmony setup, making early startup failures invisible.
+            // Unity logs go to Player.log, while MelonLogger goes to MelonLoader logs.
+            LogStatus("Init ENTERED (diagnostic build 0.1.1)");
+            try
+            {
+                InitializePatches();
+            }
+            catch (Exception error)
+            {
+                // Include failures from method resolution, type initialization, and
+                // even the normal error-reporting code in InitializePatches.
+                LogFailure("unhandled Init exception: " + error);
+            }
+        }
 
-            // Resolve the exact overloads identified in the user's own generated assembly.
-            // Never report success if either overload is missing.
+        private static void InitializePatches()
+        {
+            if (harmony != null)
+            {
+                LogStatus("Init called again; patches already installed.");
+                return;
+            }
+
             var owner = typeof(DataUnit.RelationData);
             var add = AccessTools.Method(owner, "AddIntim", new[]
             {
@@ -33,7 +52,7 @@ namespace MOD_AffinityProtection
             });
             if (add == null || set == null)
             {
-                MelonLogger.Error("AffinityProtection: incompatible game build: required RelationData affinity overload missing; no patches installed.");
+                LogFailure("incompatible game build: required RelationData affinity overload missing; no patches installed. AddIntim=" + (add != null) + ", SetIntim=" + (set != null));
                 return;
             }
 
@@ -41,7 +60,7 @@ namespace MOD_AffinityProtection
             var setPrefix = AccessTools.Method(typeof(ModMain), nameof(SetIntimPrefix));
             if (addPrefix == null || setPrefix == null)
             {
-                MelonLogger.Error("AffinityProtection: internal prefix lookup failed; no patches installed.");
+                LogFailure("internal prefix lookup failed; no patches installed.");
                 return;
             }
 
@@ -51,14 +70,16 @@ namespace MOD_AffinityProtection
                 candidate.Patch(add, prefix: new HarmonyMethod(addPrefix));
                 candidate.Patch(set, prefix: new HarmonyMethod(setPrefix));
                 harmony = candidate;
-                MelonLogger.Msg("AffinityProtection: patched " + add.DeclaringType.FullName + "." + add.Name + "(" + string.Join(", ", Array.ConvertAll(add.GetParameters(), p => p.ParameterType.Name)) + ")");
-                MelonLogger.Msg("AffinityProtection: patched " + set.DeclaringType.FullName + "." + set.Name + "(" + string.Join(", ", Array.ConvertAll(set.GetParameters(), p => p.ParameterType.Name)) + ")");
-                MelonLogger.Msg("AffinityProtection: startup patch installation complete; confirm behavior using a backup save.");
+                LogStatus("patched " + add.DeclaringType.FullName + "." + add.Name + "(" + string.Join(", ", Array.ConvertAll(add.GetParameters(), p => p.ParameterType.Name)) + ")");
+                LogStatus("patched " + set.DeclaringType.FullName + "." + set.Name + "(" + string.Join(", ", Array.ConvertAll(set.GetParameters(), p => p.ParameterType.Name)) + ")");
+                LogStatus("startup patch installation complete; confirm behavior using a backup save.");
             }
             catch (Exception error)
             {
-                candidate.UnpatchSelf();
-                MelonLogger.Error("AffinityProtection: patch installation FAILED: " + error);
+                try { candidate.UnpatchSelf(); }
+                catch (Exception cleanupError) { LogFailure("patch cleanup failed: " + cleanupError); }
+                harmony = null;
+                LogFailure("patch installation FAILED: " + error);
             }
         }
 
@@ -66,9 +87,16 @@ namespace MOD_AffinityProtection
         {
             if (harmony == null)
                 return;
-            harmony.UnpatchSelf();
-            harmony = null;
-            MelonLogger.Msg("AffinityProtection: removed patches.");
+            try
+            {
+                harmony.UnpatchSelf();
+                harmony = null;
+                LogStatus("removed patches.");
+            }
+            catch (Exception error)
+            {
+                LogFailure("Destroy failed: " + error);
+            }
         }
 
         // Suppress negative deltas before the game's AddIntim method processes them.
@@ -136,7 +164,7 @@ namespace MOD_AffinityProtection
                 if (!reportedLookupError)
                 {
                     reportedLookupError = true;
-                    MelonLogger.Error("AffinityProtection: relation lookup failed; protection disabled for this call: " + ex);
+                    LogFailure("relation lookup failed; protection disabled for this call: " + ex);
                 }
                 return false;
             }
@@ -145,7 +173,25 @@ namespace MOD_AffinityProtection
         private static void LogOccasionally(string action, int count)
         {
             if (count <= 5 || count % 100 == 0)
-                MelonLogger.Msg("AffinityProtection: " + action + " (total " + count + ")");
+                LogStatus(action + " (total " + count + ")");
+        }
+
+        // Log independently to both sinks. Failure in a logging subsystem must never
+        // prevent affinity processing or conceal a diagnostic from the other sink.
+        private static void LogStatus(string message)
+        {
+            try { UnityEngine.Debug.Log("AffinityProtection: " + message); }
+            catch (Exception) { /* Unity logger unavailable; try MelonLogger. */ }
+            try { MelonLogger.Msg("AffinityProtection: " + message); }
+            catch (Exception) { /* No logging sink available at this point. */ }
+        }
+
+        private static void LogFailure(string message)
+        {
+            try { UnityEngine.Debug.LogError("AffinityProtection: " + message); }
+            catch (Exception) { /* Unity logger unavailable; try MelonLogger. */ }
+            try { MelonLogger.Error("AffinityProtection: " + message); }
+            catch (Exception) { /* No logging sink available at this point. */ }
         }
     }
 }
