@@ -1,57 +1,71 @@
-# Build and test the experimental mod (Windows)
+# Build, package and test the experimental mod (Windows)
 
-**Status:** The user confirmed that the source compiles successfully on Windows (`net472`, `MOD_AffinityProtection.dll`). Packaging and in-game behavior are **not yet verified**. Back up your save before attempting to use the mod.
+**Status (September 19, 2026):** The user confirmed a successful Windows `net472` build and a successful `toi mod pack` run. The resulting folder listing contains both `ModExportData.cache` and `ModCode/dll/MOD_AffinityProtection.dll`, and no `.git` folder. **The game has not yet loaded the mod, the Harmony patches have not been confirmed in logs, and actual affinity protection has not been tested.** Back up your save first.
 
-## 1. Configure once and compile
+## 1. Build (already passed)
 
-From PowerShell in the cloned repository, if you have already configured `ModCode/Local.props`, **keep it**; do not overwrite it with the example:
+From PowerShell in the cloned repository, keep your existing local `ModCode/Local.props` and run:
 
 ```powershell
 git pull origin main
 dotnet build .\ModCode\ModMain\ModMain.csproj -c Release
 ```
 
-On first setup only, copy `ModCode/Local.props.example` to `ModCode/Local.props`, and set `GameDir` to the folder containing your game's `MelonLoader` directory. `Local.props` and proprietary DLLs must not be committed.
+If setting up a new machine only: copy `ModCode/Local.props.example` to `ModCode/Local.props` and set `GameDir` to the game folder containing `MelonLoader`. Do not commit the local properties file or any game DLLs.
 
-## 2. Package without Git metadata
-
-TaleOfImmortalTool 0.6.1 walked into `.git/config` when packing straight from the repository, then failed with `DirectoryNotFoundException` because the output `.git` directory was not created. The project `.gitignore` now excludes `.git/` for the tool's ignore walker. Pass the `--glob` override explicitly too, to prevent Git history/config from being included even if ignore-file behavior changes:
+## 2. Package (already passed)
 
 ```powershell
 toi mod pack . -o "$env:USERPROFILE\Desktop\AffinityProtection-test" --clean --glob '.git/'
 ```
 
-**Important:** `-o` is an output *base* path by default: the tool formats the actual folder as `Mod_{{SoleId}}_{{FolderName}}`. For this project, the expected actual folder is:
+TaleOfImmortalTool 0.6.1 previously tried to copy `.git/config`, failing with `DirectoryNotFoundException`. The `.git/` ignore pattern fixes this. The tool formats the output name, so the **actual packed folder** is:
 
 ```text
 %USERPROFILE%\Desktop\Mod_AffinityProtection_AffinityProtection-test
 ```
 
-The packer prints its actual `Output Folder:` path. Read that rather than assuming the `-o` argument is the final directory. Its `--clean` option deletes that generated output directory if it already exists; only point it at a disposable test destination.
+Successful console output included `modNamespace: MOD_AffinityProtection`, copying the built DLL to `ModCode/dll/MOD_AffinityProtection.dll`, writing `ModExportData.cache`, and `Successfully packed to:`. The user's directory listing confirms those files. The packer also includes `docs/`, `tools/`, `README.md`, and `.gitignore` — development extras not needed for playing; they do not establish that the mod loads. Do not copy the repository root into the game: copy only the **packed** folder.
 
-To inspect the package in PowerShell:
+For a quick package check:
 
 ```powershell
 $package = Join-Path $env:USERPROFILE 'Desktop\Mod_AffinityProtection_AffinityProtection-test'
-Get-ChildItem -LiteralPath $package -Recurse | Select-Object -ExpandProperty FullName
 Test-Path -LiteralPath (Join-Path $package 'ModExportData.cache')
 Test-Path -LiteralPath (Join-Path $package 'ModCode\dll\MOD_AffinityProtection.dll')
 Test-Path -LiteralPath (Join-Path $package '.git')
 ```
 
-The first two `Test-Path` results should be `True` and the `.git` result should be `False`. If the output or checks differ, stop and send the output before installing. A packer success message by itself does not prove the code DLL was included.
+Expected: `True`, `True`, `False`.
 
-## 3. Verify the hook was actually installed (backup save only)
+## 3. Install and enable as a local in-game mod (NOT a standalone MelonMod)
 
-After verifying the package, install the test output via the game's supported mod import/loader flow. Do **not** copy the raw DLL into MelonLoader's generic `Mods` folder; this project uses the game's in-game `ModMain.Init()` entry point. Start the game with the mod enabled and inspect `Player.log` or the MelonLoader log for `AffinityProtection:`. Both exact-overload `patched` messages must appear. If they do not, assume the mod is not active and send the relevant startup log lines.
+**Close Tale of Immortal before installing and back up the save you intend to test.** Use the game's built-in `Mod` > `Local Mods` > `Import mod data` control and select the **packed folder** above, OR copy that whole packed folder (not just the DLL, and not the repository root) into `<GameDir>/ModExportData/`. If a previous test folder with the same name is already installed, remove or rename that *specific previous test folder* before copying so you do not nest directories or leave stale files; do not delete unrelated mods.
 
-## 4. Test safely on a backup save
+Open the game, go to `Mod` > `Local Mods`, locate `Partner Affinity Protection`, enable/check it, and restart the game if requested. The game's mod menu labels may differ by language/version. Do **not** copy the DLL to generic `MelonLoader/Mods`: the source uses the game's `ModMain.Init()` entry point.
 
-1. Record affinity values in both directions between the player and a current lover/spouse, if accessible.
-2. Advance through a month/year rollover that normally reduces affinity and inspect both directions.
+## 4. Check runtime logs before testing affinity
+
+With the mod enabled, start the game and inspect `Player.log` (typically under the game's `*_Data` folder) and/or the MelonLoader log (under the game's `MelonLoader/Logs`). Search for `AffinityProtection:`. The source should log the exact `patched ... AddIntim(...)` and `patched ... SetIntim(...)` messages plus `startup patch installation complete`. If those lines do not appear, or exceptions appear, assume the patch is **not active** and share relevant log lines. `MelonLogger` output might be routed differently by the game's mod host; absence in one log is not proof of nonexecution, so check both where available.
+
+Example PowerShell to find relevant lines from existing logs (change `$gameDir` if needed):
+
+```powershell
+$gameDir = ([xml](Get-Content .\ModCode\Local.props -Raw)).Project.PropertyGroup.GameDir
+Get-ChildItem -LiteralPath $gameDir -File -Recurse -Include Player.log,Latest.log,MelonLoader*.log -ErrorAction SilentlyContinue |
+    Select-String -Pattern 'AffinityProtection|MOD_AffinityProtection' -Context 1,2 |
+    Select-Object Path,LineNumber,Line
+```
+
+If the script finds no logs, search the game's install folder for `Player.log` or `Latest.log` manually and share a relevant excerpt, not an entire save file.
+
+## 5. Test on a backup save only
+
+1. Record affinity values in **both directions** between the player and a current lover/spouse, if accessible.
+2. Advance through a month/year rollover that normally reduces affinity; inspect both directions.
 3. Trigger a negative interaction with that partner, then a gift that increases affinity.
 4. Trigger an unrelated NPC's negative interaction: it must still decrease normally.
-5. Test relationship breakup/removal: `ClearIntim` is intentionally not hooked; breakup semantics are unverified.
-6. Save/reload and check for unexpected changes.
+5. Test breakup/removal: `ClearIntim` is intentionally untouched; breakup semantics are unverified.
+6. Save/reload and inspect for unexpected changes.
 
-Known limitations: the `SetIntim` prefix compares a `float` against `GetIntim()` (which returns `int`), so sub-integer losses might evade it. Other direct affinity writes and `ClearIntim` may bypass the patch. Relationship breakup can happen for other reasons. Record game version, before/after values, and log messages when reporting issues.
+Known limitations: the `SetIntim` prefix compares a `float` with `GetIntim()` (an `int`), so sub-integer decreases might evade it. Direct affinity writes or `ClearIntim` may bypass the patch, and breakups may happen independently of affinity. Report the game version, before/after values, and relevant log lines if behavior differs.
