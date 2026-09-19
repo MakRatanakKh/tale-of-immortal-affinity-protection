@@ -12,7 +12,11 @@ The mod source must use `HarmonyLib.Harmony` for its Harmony instance and constr
 
 ## CS0012: Object is defined in Il2Cppmscorlib
 
-Generated `Assembly-CSharp.dll` uses types whose core assembly is `Il2Cppmscorlib.dll`, which is not interchangeable with .NET Framework `mscorlib.dll`. The project explicitly references that DLL, preferring the copy beside `Assembly-CSharp.dll` and otherwise searching recursively under `GameDir/MelonLoader`. If it is missing, the build now emits a specific path error.
+Generated `Assembly-CSharp.dll` uses types whose core assembly is `Il2Cppmscorlib.dll`, which is not interchangeable with .NET Framework `mscorlib.dll`. The project explicitly references that DLL, preferring the copy beside `Assembly-CSharp.dll` and otherwise searching recursively under `GameDir/MelonLoader`. If it is missing, the build emits a specific path error.
+
+## CS0012: Il2CppObjectBase is defined in Il2CppInterop.Runtime
+
+This is a **different** dependency from `Il2Cppmscorlib.dll`. Generated game types inherit from `Il2CppObjectBase`, and the compiler must reference `Il2CppInterop.Runtime.dll` explicitly. The build now prefers a copy beside `Assembly-CSharp.dll` and otherwise searches recursively beneath `GameDir/MelonLoader`. Merely referencing `MelonLoader/Managed/Il2Cpp*.dll` is insufficient if this DLL lives elsewhere.
 
 In PowerShell **from the repository root**, find dependency DLL locations using your configured game path:
 
@@ -20,7 +24,7 @@ In PowerShell **from the repository root**, find dependency DLL locations using 
 $gameDir = ([xml](Get-Content .\ModCode\Local.props -Raw)).Project.PropertyGroup.GameDir
 "GameDir: $gameDir"
 Get-ChildItem -LiteralPath $gameDir -Recurse -File -Filter '*.dll' -ErrorAction SilentlyContinue |
-    Where-Object { $_.Name -match '^(MelonLoader|0Harmony|HarmonyLib|HarmonyX|Il2Cppmscorlib|Assembly-CSharp)\.dll$' } |
+    Where-Object { $_.Name -match '^(MelonLoader|0Harmony|HarmonyLib|HarmonyX|Il2Cppmscorlib|Il2CppInterop\.Runtime|Assembly-CSharp)\.dll$' } |
     Select-Object -ExpandProperty FullName
 ```
 
