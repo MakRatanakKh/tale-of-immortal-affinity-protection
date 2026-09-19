@@ -1,10 +1,10 @@
 {
-  "soleID": "AffinityProtection",
+  "soleID": "Rk7Qp2",
   "createTicks": 639044820000000000,
   "name": "Partner Affinity Protection",
   "author": "MakRatanakKh",
   "desc": "Experimental: prevent affinity losses between the player and current spouse/cultivation partners without blocking gains.",
-  "ver": "0.1.0",
+  "ver": "0.1.3",
   "autoSave": true,
   "isCreateNPC": false,
   "exportVer": 0,
