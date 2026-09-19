@@ -9,7 +9,8 @@ namespace MOD_AffinityProtection
     public class ModMain
     {
         private const string HarmonyId = "MakRatanakKh.TaleOfImmortal.AffinityProtection";
-        private static Harmony harmony;
+        // The game also exposes a namespace named Harmony; qualify the class to avoid CS0118.
+        private static HarmonyLib.Harmony harmony;
         private static int blockedAdd;
         private static int blockedSet;
         private static bool reportedLookupError;
@@ -44,7 +45,7 @@ namespace MOD_AffinityProtection
                 return;
             }
 
-            var candidate = new Harmony(HarmonyId);
+            var candidate = new HarmonyLib.Harmony(HarmonyId);
             try
             {
                 candidate.Patch(add, prefix: new HarmonyMethod(addPrefix));
