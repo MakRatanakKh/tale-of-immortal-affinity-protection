@@ -1,0 +1,24 @@
+# Build outputs
+bin/
+obj/
+[Bb]uild/
+[Dd]ist/
+*.dll
+*.pdb
+*.cache
+
+# Proprietary game files, loaders and runtime output
+Assembly-CSharp.dll
+MelonLoader/
+*_Data/
+Player.log
+Player-prev.log
+*.sav
+*.save
+
+# Local user settings
+.vs/
+.idea/
+.vscode/
+*.user
+*.suo
