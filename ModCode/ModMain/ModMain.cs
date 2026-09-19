@@ -5,7 +5,7 @@ using MelonLoader;
 using Il2Cpp;
 
 // Tale of Immortal's in-game C# mod entry point (not a standalone MelonMod).
-namespace MOD_AffinityProtection
+namespace MOD_Rk7Qp2
 {
     public class ModMain
     {
@@ -21,7 +21,7 @@ namespace MOD_AffinityProtection
             // Must run before reflection or patch setup. In-game mod logging is not
             // guaranteed to appear in Player.log or MelonLoader/Latest.log, so also
             // write a best-effort diagnostic to the user's temporary directory.
-            LogStatus("Init ENTERED (diagnostic build 0.1.2)");
+            LogStatus("Init ENTERED (six-character-ID diagnostic build 0.1.3)");
             try
             {
                 InitializePatches();
