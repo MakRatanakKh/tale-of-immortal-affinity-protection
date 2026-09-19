@@ -7,15 +7,18 @@
     <LangVersion>latest</LangVersion>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <GameAssemblyDir>$(GameDir)/MelonLoader/Managed</GameAssemblyDir>
+    <GameAssemblyDir Condition="!Exists('$(GameAssemblyDir)/Assembly-CSharp.dll')">$(GameDir)/MelonLoader/Il2CppAssemblies</GameAssemblyDir>
   </PropertyGroup>
 
-  <Target Name="CheckLocalGamePath" BeforeTargets="ResolveReferences" Condition="'$(GameDir)' == ''">
-    <Error Text="Set GameDir in ModCode/Local.props (copy ModCode/Local.props.example first)." />
+  <Target Name="CheckLocalGamePath" BeforeTargets="ResolveReferences">
+    <Error Condition="'$(GameDir)' == ''" Text="Set GameDir in ModCode/Local.props (copy ModCode/Local.props.example first)." />
+    <Error Condition="'$(GameDir)' != '' And !Exists('$(GameAssemblyDir)/Assembly-CSharp.dll')" Text="Assembly-CSharp.dll not found in MelonLoader/Managed or MelonLoader/Il2CppAssemblies under GameDir. Check the installation path." />
   </Target>
 
-  <!-- These are local references; never commit the game's or MelonLoader's DLLs. -->
+  <!-- Local game/loader references only; do not commit DLLs. -->
   <ItemGroup Condition="'$(GameDir)' != ''">
-    <Reference Include="$(GameDir)/MelonLoader/Managed/Assembly-CSharp*.dll"><Private>false</Private></Reference>
+    <Reference Include="$(GameAssemblyDir)/Assembly-CSharp*.dll"><Private>false</Private></Reference>
     <Reference Include="$(GameDir)/MelonLoader/*.dll"><Private>false</Private></Reference>
     <Reference Include="$(GameDir)/MelonLoader/Managed/Il2Cpp*.dll"><Private>false</Private></Reference>
     <Reference Include="$(GameDir)/MelonLoader/Managed/Unhollower*.dll"><Private>false</Private></Reference>
