@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>AffinityLoaderProbe</AssemblyName>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <!-- Reuse the local game path; this file is ignored by Git and must never be committed. -->
+  <Import Project="../../ModCode/Local.props" Condition="Exists('../../ModCode/Local.props')" />
+
+  <ItemGroup Condition="'$(GameDir)' != ''">
+    <_MelonLoaderDll Include="$(GameDir)/MelonLoader/**/MelonLoader.dll" />
+    <Reference Include="@(_MelonLoaderDll)"><Private>false</Private></Reference>
+  </ItemGroup>
+
+  <Target Name="CheckProbeReferences" BeforeTargets="ResolveReferences">
+    <Error Condition="'$(GameDir)' == ''" Text="Set GameDir in ModCode/Local.props before building the loader probe." />
+    <Error Condition="'@(_MelonLoaderDll)' == ''" Text="MelonLoader.dll not found under $(GameDir)/MelonLoader." />
+  </Target>
+</Project>
