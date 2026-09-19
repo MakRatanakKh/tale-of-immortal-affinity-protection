@@ -12,7 +12,8 @@ if (args.Length != 1 || !File.Exists(args[0]))
 }
 
 var input = Path.GetFullPath(args[0]);
-var terms = new Regex("intim|favor|affin|relation|spouse|partner|marriage|lover|couple|friend|goodwill|unit|好感|关系|道侣|夫妻|结缘", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+// Intentionally omit generic 'unit'/'friend': those would dump nearly the entire game API.
+var terms = new Regex("intim|favor|affin|relation|spouse|partner|marriage|lover|couple|goodwill|好感|关系|道侣|夫妻|结缘", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 using var stream = File.OpenRead(input);
 using var pe = new PEReader(stream);
 if (!pe.HasMetadata)
