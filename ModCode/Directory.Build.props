@@ -1,0 +1,24 @@
+<Project>
+  <!-- Copy Local.props.example to Local.props and set GameDir on your own computer. -->
+  <Import Project="Local.props" Condition="Exists('Local.props')" />
+
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+  </PropertyGroup>
+
+  <Target Name="CheckLocalGamePath" BeforeTargets="ResolveReferences" Condition="'$(GameDir)' == ''">
+    <Error Text="Set GameDir in ModCode/Local.props (copy ModCode/Local.props.example first)." />
+  </Target>
+
+  <!-- These are local references; never commit the game's or MelonLoader's DLLs. -->
+  <ItemGroup Condition="'$(GameDir)' != ''">
+    <Reference Include="$(GameDir)/MelonLoader/Managed/Assembly-CSharp*.dll"><Private>false</Private></Reference>
+    <Reference Include="$(GameDir)/MelonLoader/*.dll"><Private>false</Private></Reference>
+    <Reference Include="$(GameDir)/MelonLoader/Managed/Il2Cpp*.dll"><Private>false</Private></Reference>
+    <Reference Include="$(GameDir)/MelonLoader/Managed/Unhollower*.dll"><Private>false</Private></Reference>
+    <Reference Include="$(GameDir)/MelonLoader/Managed/Unity*.dll"><Private>false</Private></Reference>
+  </ItemGroup>
+</Project>
