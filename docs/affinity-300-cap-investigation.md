@@ -1,43 +1,54 @@
-# Investigation: 300 affinity cap vs. protection clamp (2026-09-20)
+# Affinity maximum 300: investigation and experimental fix (2026-09-20)
 
-## Findings
+## Evidence and limits
 
-**High-confidence game-design cap, not yet a bytecode-confirmed implementation detail:** Public Tale of Immortal guides describe NPC affinity as ranging from -300 to +300, with five hearts representing +300. A December 2024 TapTap guide independently describes 300 as maximum. These sources discuss normal gameplay; they do not establish precisely how every method in the user's 2026 build enforces the cap.
+Public gameplay guides describe the ordinary affinity range as -300 to +300, with 300 corresponding to five hearts:
+- https://www.gamersky.com/handbook/202103/1368709.shtml
+- https://www.taptap.cn/moment/619323840203327612
+- https://tale-of-immortal.fandom.com/wiki/NPC
 
-Sources:
-- https://www.gamersky.com/handbook/202103/1368709.shtml (2021 guide explicitly says range [-300,300]).
-- https://www.taptap.cn/moment/619323840203327612 (2024-12-20 guide says 5 hearts = 300 maximum).
-- https://tale-of-immortal.fandom.com/wiki/NPC (wiki says 5 hearts = 300 maximum).
-- https://tale-of-immortal.fandom.com/wiki/Affinity_and_Gift (wiki describes gifts reaching 300 maximum).
+In the user's 0.2.3 runtime log, a protected NPC -> player relationship rose from 302 to a raw 303.375. The game immediately requested SetIntim(300), but our old prefix substituted 303.375 and left the relationship above the ordinary maximum. The specific reason the game requested 300 has not been confirmed by decompiling its native code; cap normalization is a plausible explanation. The user subsequently reported several crashes during their testing. **We do not know whether the mod, the out-of-range value, another mod, or the game caused those crashes.** We must not claim crash prevention or save safety from this patch alone.
 
-**Observed in user-supplied 0.2.3-test runtime log, NPC -> player, ID UdlliE:**
-1. `SetIntim BEFORE; requestedAbsolute=303.375; ... raw=302` followed by `AFTER ... raw=303.38` (logger formats output; the requested raw float is 303.375).
-2. Immediately afterwards: `SetIntim BEFORE; requestedAbsolute=300; ... raw=303.38`.
-3. Our prefix: `SetIntim CLAMPED; requestedAbsolute=300; passedAbsolute=303.38; guard=intimToPlayerUnit`.
-4. `AFTER ... raw=303.38`. Later requested 299.25 and 302 were also blocked, with raw remaining around 303.38.
+## Experimental 0.2.4 code now committed; NOT YET COMPILED OR RUNTIME-TESTED
 
-**Confirmed code issue:** `ModCode/ModMain/ModMain.cs` current `SetIntimPrefix` clamps *every* requested value below the current validated raw float, including an attempted return from above 300 down to 300. The earlier 0.2.2 integer-based guard shared the issue whenever the integer getter exceeded 300. This prevents a game-issued write to normalize an over-cap value. It is plausible repeated positive events can keep an out-of-range affinity above 300. The exact call stack and reasons for the game-requested 300 have NOT been established by decompilation; 300 may be a clamp/normalization or another game mechanic.
+Shared pure rule: `ModCode/ModMain/AffinityCapPolicy.cs`, with dependency-free test harness in `tools/AffinityCapTests/`. Both entry points build against the same policy. `ModMain.cs` applies it only after the existing current Married/Lover filter, using the validated raw float when possible and the existing integer fallback otherwise. The negative AddIntim cancellation remains unchanged, as do unrelated NPC writes and ClearIntim.
 
-**What is not established:** No evidence so far of a crash, save corruption, infinite value growth, or a precise limit in this build's `SetIntim` code. Do not claim these outcomes. The fact that +300 is the normal-gameplay range does not prove every out-of-range write is unsafe.
+For a current value at or below 300: a requested decrease is held at the exact current value, while gains are allowed up to 300. For an already-overcap current value: the next protected SetIntim write normalizes it to 300, regardless of whether that write requested an increase or a decrease. A new request above 300 is limited to 300. There is no background sweep, save-file migration, or guarantee that every alternative affinity writer uses SetIntim. A blocked negative AddIntim by itself does not normalize an overcap value. An invalid raw read retains the prior integer fallback (fractional protection then remains uncertain).
 
-## Proposed cap-aware behavior — NOT IMPLEMENTED
+The logger distinguishes `CAP NORMALIZED`, `CAP LIMITED`, and `DECAY BLOCKED`, with protected before/after raw readings. No claim of successful compilation, test execution, in-game verification, crash repair, or complete protection is made by these commits.
 
-On both current player -> NPC and NPC -> player protected relations, handle cap-aware `SetIntim` *only after* a validated raw read (otherwise clearly log fallback/uncertainty):
-- Reject/prevent positive writes above the normal +300 limit, rather than temporarily allowing over-cap increases to become the effective value.
-- If current raw affinity is <=300, preserve it against a lower request using the exact float; still permit normal positive changes up to 300.
-- If current raw affinity is >300, allow normalization down to 300. For a request below 300, use 300 rather than allowing the value to fall below the cap. Keep logs distinguishing CAP NORMALIZED, CAP LIMITED, and DECAY BLOCKED.
-- Never touch unrelated NPCs, `ClearIntim`, or the negative bound. Preserve the `Married`/`Lover` filter.
-- Be careful about temporary intermediate writes inside `AddIntim`: the current runtime log shows a >300 `SetIntim` followed immediately by another `SetIntim(300)`. Confirm the cap-aware intervention does not change other expected side effects.
+## First run: safeguard, compile and unit-test
 
-Potential edge case: if a particular game event intentionally writes >300, this change would alter it; normal-gameplay sources make that less likely but cannot exclude it. Do not silently ship the change as verified.
+With Tale of Immortal completely closed, first copy your current `Mods/AffinityProtectionStandalone.dll` somewhere safe, and separately back up your game saves. **Do not overwrite your primary save with this experimental revision.** In the repository root:
 
-## Safe validation plan
+```powershell
+$gameDir = ([xml](Get-Content .\ModCode\Local.props -Raw)).Project.PropertyGroup.GameDir
+$installed = Join-Path $gameDir 'Mods\AffinityProtectionStandalone.dll'
+Copy-Item $installed "$env:USERPROFILE\Desktop\AffinityProtectionStandalone-pre-cap-fix.dll" -Force
+git pull origin main
+dotnet run --project .\tools\AffinityCapTests\AffinityCapTests.csproj -c Release
+if ($LASTEXITCODE -ne 0) { throw 'Policy tests failed; do not install.' }
+dotnet build .\tools\AffinityStandalone\AffinityStandalone.csproj -c Release
+if ($LASTEXITCODE -ne 0) { throw 'Standalone build failed; do not install.' }
+```
 
-1. Save copies of the last working DLL and a disposable game save; close the game before installation.
-2. Build and install the proposed cap-aware change only after implementation and successful compilation.
-3. On a partner with affinity just below 300, verify fractional gains still occur, but the raw value does not finish over 300 after the game interaction.
-4. If a backup save already has affinity above 300, trigger a benign interaction and check `SetIntim` ends at 300; verify an attempted loss from below 300 is still blocked.
-5. Repeat in both directions and verify unrelated NPC loss still works; inspect MelonLoader for errors and perform save/reload test.
-6. Until validated, the existing 0.2.3 DLL remains unchanged in the repo; for cautious play avoid repeatedly increasing an already maxed relationship, and maintain backups. Removing the mod is the way to let the game resume its ordinary affinity writes if over-cap accumulation is a concern.
+Only with passing tests and build, with the game closed:
 
-**Status:** Investigation documented; no code or gameplay fix has been released.
+```powershell
+Copy-Item '.\tools\AffinityStandalone\bin\Release\net6.0\AffinityProtectionStandalone.dll' $installed -Force
+```
+
+## Minimal disposable-save gameplay test
+
+1. Keep the old in-game Local Mod disabled/removed, and do not install duplicate affinity patch providers. On a copy of a save, start the game, enter the world, and confirm the log contains `cap-aware fractional guard build 0.2.4-test`, `patched ... AddIntim`, and `patched ... SetIntim`.
+2. With an existing protected relationship that has a raw value over 300 on the copy, trigger a benign affinity interaction. Expect `CAP NORMALIZED` and `SetIntim AFTER ... raw=300`; **do not** assume loading alone normalizes stored data.
+3. Test a relationship below 300 with a fractional attempted loss: expect `DECAY BLOCKED` and unchanged raw affinity. A gain that would exceed 300 should produce `CAP LIMITED` and end at 300.
+4. Test both directions if practical, plus unrelated NPC affinity loss, and save/reload only the disposable copy to check persistence. A normal visual five-heart display is not enough to confirm exact values.
+5. Check errors and raw values:
+
+```powershell
+$log = Join-Path $gameDir 'MelonLoader\Latest.log'
+Select-String -Path $log -Pattern '0.2.4-test|CAP NORMALIZED|CAP LIMITED|DECAY BLOCKED|RAW READ|NUMERIC PROTECTED|Exception|Error' -Context 0,1
+```
+
+If there is another crash, stop testing; do not overwrite the main save. Keep the most recent MelonLoader logs and the game's Player.log, note which action preceded the crash and whether it also happens with the mod removed. With the game closed, restore the backed-up DLL if desired, or move the DLL out of `Mods` to disable it. Reverting the DLL does **not** automatically repair out-of-range values already written into a save. Avoid committing private game logs, saves, or proprietary game binaries to this public repository.
