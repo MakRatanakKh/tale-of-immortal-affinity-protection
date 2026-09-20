@@ -1,9 +1,9 @@
 using System;
 using MelonLoader;
 
-// Standalone MelonLoader 0.7.x entry point. OnInitializeMelon was verified on
-// the user's game, but this cap-aware revision still needs compilation and testing.
-[assembly: MelonInfo(typeof(AffinityProtectionStandalone.StandaloneMod), "Partner Affinity Protection (Experimental Standalone)", "0.2.4-test", "MakRatanakKh")]
+// Standalone MelonLoader 0.7.x entry point. The cap-aware build passed the
+// documented unit and user gameplay tests; continue to keep save backups.
+[assembly: MelonInfo(typeof(AffinityProtectionStandalone.StandaloneMod), "Partner Affinity Protection", "0.2.4", "MakRatanakKh")]
 
 namespace AffinityProtectionStandalone
 {
