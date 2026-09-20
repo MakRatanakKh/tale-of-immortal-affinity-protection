@@ -4,20 +4,18 @@ using HarmonyLib;
 using MelonLoader;
 using Il2Cpp;
 
-// Tale of Immortal's in-game C# mod entry point (also reused by the standalone MelonMod).
+// Shared entry point for the in-game C# mod and the standalone MelonMod.
 namespace MOD_Rk7Qp2
 {
     public class ModMain
     {
         private const string HarmonyId = "MakRatanakKh.TaleOfImmortal.AffinityProtection";
-        // Keep numeric logs focused on protected relationships during month rollovers.
         private const int MaxNumericLogLines = 240;
-        // A float that disagrees substantially with GetIntim(int) may be the wrong
-        // backing store: fail back to the known integer guard on that game build.
+        // Plausibility check, not proof of the raw field's semantics.
         private const float MaxRawGetterDifference = 1.01f;
         private static HarmonyLib.Harmony harmony;
         private static int blockedAdd;
-        private static int blockedSet;
+        private static int adjustedSet;
         private static int numericLogLines;
         private static bool reportedLookupError;
         private static bool reportedNumericReadError;
@@ -27,7 +25,7 @@ namespace MOD_Rk7Qp2
 
         public void Init()
         {
-            LogStatus("Init ENTERED (fractional affinity guard build 0.2.3-test)");
+            LogStatus("Init ENTERED (cap-aware fractional guard build 0.2.4-test)");
             try { InitializePatches(); }
             catch (Exception error) { LogFailure("unhandled Init exception: " + error); }
         }
@@ -73,8 +71,8 @@ namespace MOD_Rk7Qp2
                 harmony = candidate;
                 LogStatus("patched " + add.DeclaringType.FullName + "." + add.Name + "(" + string.Join(", ", Array.ConvertAll(add.GetParameters(), p => p.ParameterType.Name)) + ")");
                 LogStatus("patched " + set.DeclaringType.FullName + "." + set.Name + "(" + string.Join(", ", Array.ConvertAll(set.GetParameters(), p => p.ParameterType.Name)) + ")");
-                LogStatus("fractional guard: validate candidate float store against GetIntim(int); otherwise use prior integer fallback. PROTECTED pairs only; max " + MaxNumericLogLines + " numeric lines per session.");
-                LogStatus("startup patch installation complete; confirm behavior using a backup save.");
+                LogStatus("cap-aware fractional guard: protected affinity capped at " + AffinityCapPolicy.Maximum + "; raw reads validated against GetIntim(int) with integer fallback; maximum " + MaxNumericLogLines + " numeric lines per session.");
+                LogStatus("startup patch installation complete; test only with a disposable backup save.");
             }
             catch (Exception error)
             {
@@ -98,8 +96,10 @@ namespace MOD_Rk7Qp2
             catch (Exception error) { LogFailure("Destroy failed: " + error); }
         }
 
-        // The delta patch is independent of how affinity is stored: cancel a negative
-        // delta only when the other endpoint is the player's active spouse/partner.
+        // Keep negative-delta suppression as before. Positive deltas reach the
+        // game's SetIntim writer, where the cap-aware guard limits the final write.
+        // A blocked negative AddIntim does not itself repair an existing over-cap
+        // value; normalization happens on the next protected SetIntim write.
         private static bool AddIntimPrefix(DataUnit.RelationData __instance, string unitID, float value)
         {
             TraceAffinity(__instance, unitID, "AddIntim BEFORE; requestedDelta=" + value);
@@ -116,14 +116,24 @@ namespace MOD_Rk7Qp2
             TraceAffinity(__instance, unitID, "AddIntim AFTER");
         }
 
-        // Guard direct absolute writes as well. Use the original stored float when
-        // its identity and value can be validated; do not truncate a 300.5 to 300.
-        // ClearIntim is intentionally not patched so breakups can still clear links.
+        // Only current spouses/partners are protected. Use the exact stored float
+        // when plausibly validated, otherwise fall back to the prior integer getter.
+        // An above-300 affinity may normalize to 300; a below-300 affinity may not
+        // decline, including fractional decreases. Gains cannot exceed 300.
+        // ClearIntim is intentionally not patched (breakups remain game-controlled).
         private static void SetIntimPrefix(DataUnit.RelationData __instance, string unitID, ref float value)
         {
             TraceAffinity(__instance, unitID, "SetIntim BEFORE; requestedAbsolute=" + value);
             if (!IsProtectedPair(__instance, unitID))
                 return;
+
+            // Do not reinterpret exceptional game input. These calls need a log,
+            // not an artificial affinity value that may make the situation worse.
+            if (float.IsNaN(value) || float.IsInfinity(value))
+            {
+                LogFailure("non-finite protected SetIntim request left to game logic.");
+                return;
+            }
 
             int integerCurrent = __instance.GetIntim(unitID);
             float current;
@@ -136,25 +146,29 @@ namespace MOD_Rk7Qp2
                 if (!reportedRawFallback)
                 {
                     reportedRawFallback = true;
-                    LogFailure("fractional guard unavailable for at least one relation; using previous GetIntim(int) fallback. See RAW READ diagnostics; precise protection is not assured for that relation.");
+                    LogFailure("fractional guard unavailable for at least one relation; using GetIntim(int) fallback. Fractional precision cannot be assured for that relation.");
                 }
             }
             else if (!reportedRawSuccess)
             {
                 reportedRawSuccess = true;
-                LogStatus("RAW READ validated: " + source + "; storedFloat=" + current + "; GetIntim(int)=" + integerCurrent);
+                LogStatus("RAW READ validated: " + source + "; storedFloat=" + current.ToString("R") + "; GetIntim(int)=" + integerCurrent);
             }
 
-            // Avoid treating NaN as a decrease. The getter is validated in the
-            // helper; a non-finite requested value is left to original game logic.
-            if (float.IsNaN(value) || float.IsInfinity(value) || value >= current)
+            float requested = value;
+            float adjusted = AffinityCapPolicy.Apply(current, requested);
+            if (adjusted == requested)
                 return;
 
-            float requested = value;
-            value = current;
-            blockedSet++;
-            TraceAffinity(__instance, unitID, "SetIntim CLAMPED; requestedAbsolute=" + requested + "; passedAbsolute=" + value + "; guard=" + source);
-            LogOccasionally("clamped decreasing SetIntim", blockedSet);
+            value = adjusted;
+            string reason = current > AffinityCapPolicy.Maximum
+                ? "CAP NORMALIZED"
+                : requested > AffinityCapPolicy.Maximum
+                    ? "CAP LIMITED"
+                    : "DECAY BLOCKED";
+            adjustedSet++;
+            TraceAffinity(__instance, unitID, "SetIntim " + reason + "; requestedAbsolute=" + requested.ToString("R") + "; passedAbsolute=" + value.ToString("R") + "; previous=" + current.ToString("R") + "; guard=" + source);
+            LogOccasionally("adjusted protected SetIntim (" + reason + ")", adjustedSet);
         }
 
         private static void SetIntimPostfix(DataUnit.RelationData __instance, string unitID)
@@ -162,11 +176,11 @@ namespace MOD_Rk7Qp2
             TraceAffinity(__instance, unitID, "SetIntim AFTER");
         }
 
-        // Candidate mapping from the inspected game assembly:
-        // NPC->player: relation.intimToPlayerUnit (float)
-        // player->NPC: relation.intimToUnit[otherId] (Dictionary<string,float>)
-        // Metadata documents both but cannot establish their runtime semantics.
-        // Reject an absent/mismatched/non-finite candidate rather than writing it.
+        // Game metadata exposes these candidate raw float stores:
+        // NPC->player: relation.intimToPlayerUnit
+        // player->NPC: relation.intimToUnit[otherId]
+        // Verify each reading against GetIntim; neither metadata nor this check
+        // proves the complete runtime semantics on every game version.
         private static bool TryGetValidatedRawAffinity(DataUnit.RelationData relation, string otherId, int integerCurrent, out float raw, out string source)
         {
             raw = 0f;
@@ -204,7 +218,7 @@ namespace MOD_Rk7Qp2
                     if (!reportedRawReadError)
                     {
                         reportedRawReadError = true;
-                        LogFailure("RAW READ candidate inconsistent: " + source + "=" + raw + ", GetIntim(int)=" + integerCurrent + "; refusing raw clamp and retaining integer fallback.");
+                        LogFailure("RAW READ candidate inconsistent: " + source + "=" + raw + ", GetIntim(int)=" + integerCurrent + "; refusing raw clamp, using integer fallback.");
                     }
                     return false;
                 }
@@ -221,8 +235,8 @@ namespace MOD_Rk7Qp2
             }
         }
 
-        // Diagnostic readout does not affect patch decisions; only log protected
-        // relationships so month/year rollovers do not exhaust the quota.
+        // Diagnostic-only readout: focus on protected pairs to avoid exhausting
+        // the quota on unrelated NPCs. No logging decision changes protection.
         private static void TraceAffinity(DataUnit.RelationData relation, string otherId, string action)
         {
             if (numericLogLines >= MaxNumericLogLines || relation == null || string.IsNullOrEmpty(otherId))
@@ -252,7 +266,7 @@ namespace MOD_Rk7Qp2
                 numericLogLines++;
                 LogStatus("NUMERIC PROTECTED " + action + "; direction=" + direction + "; npcId=" + npcId + "; GetIntim(int)=" + integerAffinity + "; raw=" + (precise ? raw.ToString("R") : "unverified") + "; rawSource=" + source);
                 if (numericLogLines == MaxNumericLogLines)
-                    LogStatus("NUMERIC trace limit reached (" + MaxNumericLogLines + "); suppressing further numerical lines this session. Blocking counters remain active.");
+                    LogStatus("NUMERIC trace limit reached (" + MaxNumericLogLines + "); suppressing further numeric lines this session. Protection remains active.");
             }
             catch (Exception ex)
             {
@@ -273,19 +287,16 @@ namespace MOD_Rk7Qp2
                 var world = g.world;
                 if (world == null || world.playerUnit == null)
                     return false;
-                var player = world.playerUnit;
-                string playerId = player.data.unitData.unitID;
-                if (string.IsNullOrEmpty(playerId))
-                    return false;
+                string playerId = world.playerUnit.data.unitData.unitID;
                 string ownerId = relation.unitID;
-                if (string.IsNullOrEmpty(ownerId))
+                if (string.IsNullOrEmpty(playerId) || string.IsNullOrEmpty(ownerId))
                     return false;
                 bool ownerIsPlayer = string.Equals(ownerId, playerId, StringComparison.Ordinal);
                 bool targetIsPlayer = string.Equals(otherId, playerId, StringComparison.Ordinal);
                 if (ownerIsPlayer == targetIsPlayer)
                     return false;
                 string partnerId = ownerIsPlayer ? otherId : ownerId;
-                var playerRelation = player.data.unitData.relationData;
+                var playerRelation = world.playerUnit.data.unitData.relationData;
                 if (playerRelation == null)
                     return false;
                 return playerRelation.IsRelation(partnerId, UnitRelationType.Married)
@@ -312,14 +323,14 @@ namespace MOD_Rk7Qp2
         {
             WriteDiagnostic(message);
             try { MelonLogger.Msg("AffinityProtection: " + message); }
-            catch (Exception) { /* Host logger unavailable at this stage. */ }
+            catch (Exception) { /* Logger unavailable; diagnostic is best effort. */ }
         }
 
         private static void LogFailure(string message)
         {
             WriteDiagnostic("ERROR: " + message);
             try { MelonLogger.Error("AffinityProtection: " + message); }
-            catch (Exception) { /* Host logger unavailable at this stage. */ }
+            catch (Exception) { /* Logger unavailable; diagnostic is best effort. */ }
         }
 
         private static void WriteDiagnostic(string message)
