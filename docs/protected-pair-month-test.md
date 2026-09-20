@@ -1,29 +1,36 @@
 # Focused protected-partner month test (experimental 0.2.2)
 
-The prior month-skip test filled the 120-line numeric trace with many unrelated NPC writes. The numeric logger now only writes `NUMERIC PROTECTED` lines for relationships that `IsProtectedPair` identifies as current spouse or cultivation partner. The limit is 240 numeric lines per session. This is a diagnostic-only change; the AddIntim/SetIntim protection decisions remain as before.
+## Result: build and first runtime test completed, September 20, 2026
 
-## Procedure (backup save)
+User pulled main, backed up the previous standalone DLL, successfully built `tools/AffinityStandalone/AffinityStandalone.csproj -c Release` with five nullable warnings and no errors, copied the DLL to `<GameDir>/Mods`, and confirmed the installed path exists. They advanced approximately three or four months on another save; the precise number is unknown. They supplied two relationship UI screenshots for Na Zhen, one showing `Your Affinity` and the other `Target's Affinity` (these are different directions, NOT a before/after pair), with no obvious loss reported.
 
-1. Fully exit Tale of Immortal. Keep the earlier in-game Local Mod disabled/removed; do not run two affinity patch providers together. Back up your currently working `Mods/AffinityProtectionStandalone.dll` and your save.
-2. Pull `main` and build `tools/AffinityStandalone/AffinityStandalone.csproj -c Release`. Confirm a successful build before copying the new DLL into `<GameDir>/Mods` while the game is shut down.
-3. Start the game and load the backup save. Capture the baseline hearts for a partner, in **both** `Your Affinity` and `Target's Affinity` views if possible.
-4. Advance one month at a time, noting the months. Capture the relationship UI again and exit the game.
-5. Filter the latest MelonLoader log for `AffinityProtection: NUMERIC PROTECTED`, `blocked negative AddIntim`, `clamped decreasing SetIntim`, `relation lookup failed`, `numeric affinity readout failed`, `trace limit reached`, `Exception` and `Error`.
-6. Report the relevant log lines and whether either direction's hearts changed in private chat; do not commit private logs, screenshots, or saves to this public repository.
+The user-supplied filtered MelonLoader log recorded the following sequence for the code-identified **protected** NPC ID `UdlliE`, direction **NPC → player**, at 11:26:36:
 
-Example PowerShell in the repository root:
-
-```powershell
-$gameDir = ([xml](Get-Content .\ModCode\Local.props -Raw)).Project.PropertyGroup.GameDir
-$log = Join-Path $gameDir 'MelonLoader\Latest.log'
-Select-String -Path $log -Pattern 'AffinityProtection: NUMERIC PROTECTED|blocked negative AddIntim|clamped decreasing SetIntim|relation lookup failed|numerical affinity readout failed|trace limit reached|Exception|Error'
+```text
+NUMERIC PROTECTED AddIntim BEFORE; requestedDelta=24; direction=NPC->player; npcId=UdlliE; GetIntim(int)=300
+NUMERIC PROTECTED SetIntim BEFORE; requestedAbsolute=301.5; direction=NPC->player; npcId=UdlliE; GetIntim(int)=300
+NUMERIC PROTECTED SetIntim AFTER; direction=NPC->player; npcId=UdlliE; GetIntim(int)=302
+NUMERIC PROTECTED SetIntim BEFORE; requestedAbsolute=300; direction=NPC->player; npcId=UdlliE; GetIntim(int)=302
+NUMERIC PROTECTED SetIntim CLAMPED; requestedAbsolute=300; passedAbsolute=302; direction=NPC->player; npcId=UdlliE; GetIntim(int)=302
+AffinityProtection: clamped decreasing SetIntim (total 1)
+NUMERIC PROTECTED SetIntim AFTER; direction=NPC->player; npcId=UdlliE; GetIntim(int)=302
+NUMERIC PROTECTED AddIntim AFTER; direction=NPC->player; npcId=UdlliE; GetIntim(int)=302
 ```
 
-## Interpretation and limitations
+**Interpretation:** This is an observed decrease interception during a session that included month skips: the integer getter advanced from 300 to 302; a later requested absolute value of 300 was clamped to 302; the subsequent getter remained 302. A positive affinity write was also permitted. The log confirms the code classified this pair as protected but does not associate `UdlliE` with the name Na Zhen. It does NOT independently establish that the clamped write specifically originated from the monthly tick, that every monthly decrease was caught, or that the stored fractional float is unchanged. No further numerical lines or errors from this session were provided; absence in the filtered output is not a full-log error audit. The different-direction screenshots cannot be compared as before/after values.
 
-- A `NUMERIC PROTECTED ... AddIntim BLOCKED` or `SetIntim CLAMPED` line demonstrates interception of a writer the code classified as an active partner, not proof of every possible affinity mutation.
-- `GetIntim(int)` is only the integer getter, **not the exact stored float**; fractional changes and other write methods remain unverified.
-- Logs contain NPC **IDs**, not verified NPC names. Match names only after establishing an ID/name mapping. Do not guess that a particular ID belongs to the partner visible in a screenshot.
-- These are event-driven writer logs, not complete read-only snapshots of all relationships on each month boundary. No log line for a month does not establish that no change occurred.
-- When the quota is exhausted, the numeric lines stop, but the existing protection behavior and occasional block counters continue.
-- The new build has been committed but not yet compiled/tested on the user's game. If its build fails, keep the backed-up working DLL and send the compiler output.
+## Procedure for any later confirmation (backup save)
+
+1. Fully exit Tale of Immortal. Keep the earlier in-game Local Mod disabled/removed; never run two affinity patch providers together. Back up the DLL and save.
+2. Pull main, build the standalone project, and replace the DLL only after a successful build with the game closed.
+3. Capture a partner's baseline hearts in **both** `Your Affinity` and `Target's Affinity` views, and capture the SAME direction after a precisely noted month transition.
+4. Check `MelonLoader/Latest.log` for `AffinityProtection: NUMERIC PROTECTED`, `blocked negative AddIntim`, `clamped decreasing SetIntim`, `relation lookup failed`, `numeric affinity readout failed`, `trace limit reached`, `Exception` and `Error`.
+5. Keep private logs/screenshots/saves in chat; do not commit them or private paths to this public repo.
+
+## Unresolved items
+
+- `GetIntim(int)` is not the exact underlying float; the 301.5-to-302 readout highlights why float precision matters. Current `SetIntim` compares/clamps using an integer getter, potentially affecting fractions.
+- The diagnostic identifies a relationship as protected using `IsProtectedPair`, but names are not mapped to IDs. Do not assert `UdlliE` is Na Zhen without verifying.
+- Logs are event-driven writer traces, not complete relationship snapshots at month boundaries; there may be other write paths not patched.
+- Test independent monthly/yearly changes in BOTH directions and save/reload before claiming comprehensive protection; preserve normal relationship breakup/removal.
+- The focused logger limits detailed numeric output to 240 lines/session; protection still runs after logging reaches the limit.
