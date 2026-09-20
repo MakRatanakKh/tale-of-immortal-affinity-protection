@@ -1,0 +1,7 @@
+<Project>
+  <!-- Imported by MSBuild for this project directory after AffinityStandalone.csproj.
+       Keep the same cap rule for the in-game and MelonLoader entry points. -->
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)../../ModCode/ModMain/AffinityCapPolicy.cs" Link="Shared/AffinityCapPolicy.cs" />
+  </ItemGroup>
+</Project>
