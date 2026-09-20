@@ -1,22 +1,49 @@
 # Tale of Immortal — Partner Affinity Protection
 
-**Status (September 19, 2026): experimental; affinity protection NOT yet verified.** The game's Local Mods loader reads both our original and six-character-ID packages, but neither produced the expected C# `Init` log. The user installed a separate `net6.0` MelonLoader probe and confirmed `AffinityLoaderProbe: OnInitializeMelon reached` in MelonLoader 0.7.3's `Latest.log`. Thus, the standalone MelonLoader entry point is verified in this environment, whereas the game's Local Mods C# entry point remains unverified. This does not yet prove Harmony patches or affinity behavior work.
+**Status (September 20, 2026): standalone initialization and Harmony patch installation CONFIRMED; gameplay behavior NOT yet verified.** The user built `tools/AffinityStandalone/AffinityStandalone.csproj` successfully (`net6.0`, five nullable-reference warnings), installed `AffinityProtectionStandalone.dll` in `<GameDir>/Mods`, launched the game, and provided `MelonLoader/Latest.log` showing both affinity method patches installed and removed cleanly at shutdown. This verifies that the current standalone MelonMod loads and Harmony reports installation; it does **not** prove that affinity is protected under actual game events.
 
 Goal: stop decreases in affinity in either direction between the player and their current spouse or cultivation partners (道侣), while permitting increases and leaving unrelated NPC relations unchanged.
 
-## Current next experiment: standalone MelonMod
+## Confirmed standalone runtime milestone
 
-A new project at [`tools/AffinityStandalone/`](tools/AffinityStandalone/) reuses the exact affinity-patch source from [`ModCode/ModMain/ModMain.cs`](ModCode/ModMain/ModMain.cs) but exposes the `MelonMod.OnInitializeMelon` callback that the separate loader probe successfully exercised. It targets `net6.0` like that probe, and installs into `<GameDir>/Mods` **only after a successful Windows build**. Unlike the game's Local Mods package, this standalone DLL contains an assembly-level `MelonInfo` registration. **This new standalone project has NOT been compiled or tested on the user's machine yet.**
+The September 20 log displayed:
 
-Follow the safety checks, build, isolated installation and rollback instructions in [`docs/standalone-test.md`](docs/standalone-test.md). Disable and move only the experimental Partner Affinity Protection Local Mods package out of `ModExportData` before installing the standalone DLL, so both implementations cannot hook the same methods at once. Do not downgrade MelonLoader or disturb unrelated mods.
+```text
+AffinityProtectionStandalone: OnInitializeMelon ENTERED; initializing shared affinity patches.
+AffinityProtection: Init ENTERED (six-character-ID diagnostic build 0.1.3)
+AffinityProtection: patched Il2Cpp.DataUnit+RelationData.AddIntim(String, Single, Int32, String, Boolean)
+AffinityProtection: patched Il2Cpp.DataUnit+RelationData.SetIntim(String, Single)
+AffinityProtection: startup patch installation complete; confirm behavior using a backup save.
+AffinityProtection: removed patches.
+AffinityProtectionStandalone: deinitialized.
+```
 
-## Previous experiments
+The `Init` message still says `0.1.3` because the standalone project reuses the older shared source; the standalone assembly identifies itself as `0.2.0-test`. No need to rebuild merely to change that diagnostic wording. The separate loader probe also successfully reached `OnInitializeMelon` on MelonLoader 0.7.3.
 
-- `ModCode/ModMain/` builds as `MOD_Rk7Qp2.dll` for the game's Local Mods loader; it compiles and packs, and the package-loading line appears in `Player.log`, but `Init` does not appear in logs or `%TEMP%/AffinityProtection-diagnostic.log`.
-- `tools/LoaderProbe/` builds as `AffinityLoaderProbe.dll`; the user confirmed it loads in MelonLoader `Mods` and calls `OnInitializeMelon`.
+## Next: behavior testing on a BACKUP save
 
-The shared code attempts to patch `DataUnit.RelationData.AddIntim(string,float,int,string,bool)` and `SetIntim(string,float)` for current `Married`/`Lover` player relationships. The setter comparison uses integer `GetIntim`, potentially missing fractional changes. `ClearIntim`, other writers and breakup behavior remain unverified. Even a `patch installation complete` log is not proof that affinity is protected: test actual losses and gains only on a backup save.
+Keep the game's previous experimental Partner Affinity Protection *Local Mod* disabled/removed, so only `AffinityProtectionStandalone.dll` installs affinity patches. Do not disturb unrelated mods or downgrade MelonLoader. The loader probe can remain installed; it does not patch affinity.
 
-Other resources: [`docs/inventory-results.md`](docs/inventory-results.md) lists candidate game signatures; [`docs/verification.md`](docs/verification.md) lists game-behavior tests; [`docs/six-character-id-test.md`](docs/six-character-id-test.md) documents the previous Local Mods ID experiment.
+1. Before triggering changes, record both directions of affinity for a current spouse or cultivation partner, ideally using numerical values rather than hearts.
+2. Trigger a specific game event that normally decreases that partner's affinity (for example the relevant seasonal/yearly transition, only if reproducible). Record both directions afterward.
+3. Check `MelonLoader/Latest.log` for `AffinityProtection: blocked negative AddIntim`, `AffinityProtection: clamped decreasing SetIntim`, and `relation lookup failed` messages. A blocked-event line plus unchanged values is stronger evidence than either alone; absence of a blocked-event line can mean the tested event did not use these writers.
+4. Separately verify positive affinity gains and unrelated NPC decreases still work. Check breakup/reset behavior only with an expendable backup copy, not a primary save. Avoid overwriting the primary save during tests.
+5. Report exact before/after values or screenshots and relevant log lines in chat, **not in this public repository**.
+
+Useful log command from PowerShell (after launching/loading a backup save, triggering an event, and exiting):
+
+```powershell
+$gameDir = ([xml](Get-Content .\ModCode\Local.props -Raw)).Project.PropertyGroup.GameDir
+Select-String -Path (Join-Path $gameDir 'MelonLoader\Latest.log') -Pattern 'AffinityProtection:|AffinityProtectionStandalone:|Exception|Error' -Context 1,1
+```
+
+## Structure and known limitations
+
+- [`tools/AffinityStandalone/`](tools/AffinityStandalone/): confirmed-to-initialize `net6.0` MelonMod, installed in `<GameDir>/Mods`. [Standalone test guide](docs/standalone-test.md).
+- [`ModCode/ModMain/ModMain.cs`](ModCode/ModMain/ModMain.cs): shared Harmony code targeting `DataUnit.RelationData.AddIntim(string,float,int,string,bool)` and `SetIntim(string,float)` for current `Married`/`Lover` player relationships.
+- `ModCode/ModMain/`: original game's Local Mods packaging, compiled and recognized but C# `Init` unverified; do not enable concurrently with standalone.
+- [`tools/LoaderProbe/`](tools/LoaderProbe/): minimal standalone MelonLoader probe, verified to run.
+
+**Known limitations:** `SetIntim` compares a float with integer `GetIntim`, so fractional affinity losses might slip through; additional writers (including `ClearIntim`) and breakup handling are not fully tested. Even though the two Harmony patches report installation, the affinity filter and gameplay behavior are **still experimental**. [Assembly findings](docs/inventory-results.md) and [verification checklist](docs/verification.md) contain further details.
 
 Never commit game DLLs, saves, local configuration paths or private logs to this public repository.
