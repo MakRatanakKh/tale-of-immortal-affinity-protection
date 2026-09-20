@@ -1,10 +1,9 @@
 using System;
 using MelonLoader;
 
-// Standalone MelonLoader 0.7.x entry point: the separate LoaderProbe confirmed that
-// OnInitializeMelon is invoked on the user's setup. This does NOT establish whether
-// the shared Harmony patches can attach to this game's methods yet.
-[assembly: MelonInfo(typeof(AffinityProtectionStandalone.StandaloneMod), "Partner Affinity Protection (Experimental Standalone)", "0.2.0-test", "MakRatanakKh")]
+// Standalone MelonLoader 0.7.x entry point. OnInitializeMelon was verified on
+// the user's game, but this cap-aware revision still needs compilation and testing.
+[assembly: MelonInfo(typeof(AffinityProtectionStandalone.StandaloneMod), "Partner Affinity Protection (Experimental Standalone)", "0.2.4-test", "MakRatanakKh")]
 
 namespace AffinityProtectionStandalone
 {
