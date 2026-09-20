@@ -4,24 +4,28 @@ using HarmonyLib;
 using MelonLoader;
 using Il2Cpp;
 
-// Tale of Immortal's in-game C# mod entry point (not a standalone MelonMod).
+// Tale of Immortal's in-game C# mod entry point (also reused by the standalone MelonMod).
 namespace MOD_Rk7Qp2
 {
     public class ModMain
     {
         private const string HarmonyId = "MakRatanakKh.TaleOfImmortal.AffinityProtection";
+        // Diagnostics are for testing; this is a cap per game session, not per NPC.
+        private const int MaxNumericLogLines = 120;
         // The game also exposes a namespace named Harmony; qualify the class to avoid CS0118.
         private static HarmonyLib.Harmony harmony;
         private static int blockedAdd;
         private static int blockedSet;
+        private static int numericLogLines;
         private static bool reportedLookupError;
+        private static bool reportedNumericReadError;
 
         public void Init()
         {
             // Must run before reflection or patch setup. In-game mod logging is not
             // guaranteed to appear in Player.log or MelonLoader/Latest.log, so also
             // write a best-effort diagnostic to the user's temporary directory.
-            LogStatus("Init ENTERED (six-character-ID diagnostic build 0.1.3)");
+            LogStatus("Init ENTERED (numeric affinity diagnostic build 0.2.1-test)");
             try
             {
                 InitializePatches();
@@ -57,20 +61,23 @@ namespace MOD_Rk7Qp2
 
             var addPrefix = AccessTools.Method(typeof(ModMain), nameof(AddIntimPrefix));
             var setPrefix = AccessTools.Method(typeof(ModMain), nameof(SetIntimPrefix));
-            if (addPrefix == null || setPrefix == null)
+            var addPostfix = AccessTools.Method(typeof(ModMain), nameof(AddIntimPostfix));
+            var setPostfix = AccessTools.Method(typeof(ModMain), nameof(SetIntimPostfix));
+            if (addPrefix == null || setPrefix == null || addPostfix == null || setPostfix == null)
             {
-                LogFailure("internal prefix lookup failed; no patches installed.");
+                LogFailure("internal affinity patch lookup failed; no patches installed.");
                 return;
             }
 
             var candidate = new HarmonyLib.Harmony(HarmonyId);
             try
             {
-                candidate.Patch(add, prefix: new HarmonyMethod(addPrefix));
-                candidate.Patch(set, prefix: new HarmonyMethod(setPrefix));
+                candidate.Patch(add, prefix: new HarmonyMethod(addPrefix), postfix: new HarmonyMethod(addPostfix));
+                candidate.Patch(set, prefix: new HarmonyMethod(setPrefix), postfix: new HarmonyMethod(setPostfix));
                 harmony = candidate;
                 LogStatus("patched " + add.DeclaringType.FullName + "." + add.Name + "(" + string.Join(", ", Array.ConvertAll(add.GetParameters(), p => p.ParameterType.Name)) + ")");
                 LogStatus("patched " + set.DeclaringType.FullName + "." + set.Name + "(" + string.Join(", ", Array.ConvertAll(set.GetParameters(), p => p.ParameterType.Name)) + ")");
+                LogStatus("numeric diagnostics enabled: player-related writes only; GetIntim returns integer values, not raw float affinity; maximum " + MaxNumericLogLines + " lines per session.");
                 LogStatus("startup patch installation complete; confirm behavior using a backup save.");
             }
             catch (Exception error)
@@ -102,11 +109,20 @@ namespace MOD_Rk7Qp2
         // Zero and positive deltas and all unrelated NPCs use the original method.
         private static bool AddIntimPrefix(DataUnit.RelationData __instance, string unitID, float value)
         {
+            TraceIntegerAffinity(__instance, unitID, "AddIntim BEFORE; requestedDelta=" + value);
             if (value >= 0f || !IsProtectedPair(__instance, unitID))
                 return true;
             blockedAdd++;
+            TraceIntegerAffinity(__instance, unitID, "AddIntim BLOCKED; requestedDelta=" + value);
             LogOccasionally("blocked negative AddIntim", blockedAdd);
             return false;
+        }
+
+        // Postfix reads the actual numeric value after an allowed write; it can also
+        // run when a prefix skips the original, so treat its result as an observation.
+        private static void AddIntimPostfix(DataUnit.RelationData __instance, string unitID)
+        {
+            TraceIntegerAffinity(__instance, unitID, "AddIntim AFTER");
         }
 
         // Also catch direct absolute writes that bypass AddIntim. GetIntim returns an int
@@ -114,15 +130,66 @@ namespace MOD_Rk7Qp2
         // ClearIntim is intentionally not patched to avoid interfering with breakups.
         private static void SetIntimPrefix(DataUnit.RelationData __instance, string unitID, ref float value)
         {
+            TraceIntegerAffinity(__instance, unitID, "SetIntim BEFORE; requestedAbsolute=" + value);
             if (!IsProtectedPair(__instance, unitID))
                 return;
 
             int current = __instance.GetIntim(unitID);
             if (value >= current)
                 return;
+            float requested = value;
             value = current;
             blockedSet++;
+            TraceIntegerAffinity(__instance, unitID, "SetIntim CLAMPED; requestedAbsolute=" + requested + "; passedAbsolute=" + value);
             LogOccasionally("clamped decreasing SetIntim", blockedSet);
+        }
+
+        private static void SetIntimPostfix(DataUnit.RelationData __instance, string unitID)
+        {
+            TraceIntegerAffinity(__instance, unitID, "SetIntim AFTER");
+        }
+
+        // Read only the relationship record involved in this write, only if exactly
+        // one endpoint is the player. This includes unrelated NPCs interacting with
+        // the player, making it possible to compare protected vs unprotected writes.
+        // GetIntim is an int getter: do NOT label this the exact stored float value.
+        private static void TraceIntegerAffinity(DataUnit.RelationData relation, string otherId, string action)
+        {
+            if (numericLogLines >= MaxNumericLogLines || relation == null || string.IsNullOrEmpty(otherId))
+                return;
+            try
+            {
+                var world = g.world;
+                if (world == null || world.playerUnit == null)
+                    return;
+                var player = world.playerUnit;
+                string playerId = player.data.unitData.unitID;
+                string ownerId = relation.unitID;
+                if (string.IsNullOrEmpty(playerId) || string.IsNullOrEmpty(ownerId))
+                    return;
+
+                bool ownerIsPlayer = string.Equals(ownerId, playerId, StringComparison.Ordinal);
+                bool targetIsPlayer = string.Equals(otherId, playerId, StringComparison.Ordinal);
+                if (ownerIsPlayer == targetIsPlayer)
+                    return;
+
+                int integerAffinity = relation.GetIntim(otherId);
+                string direction = ownerIsPlayer ? "player->NPC" : "NPC->player";
+                string npcId = ownerIsPlayer ? otherId : ownerId;
+                numericLogLines++;
+                LogStatus("NUMERIC " + action + "; direction=" + direction + "; npcId=" + npcId + "; GetIntim(int)=" + integerAffinity);
+                if (numericLogLines == MaxNumericLogLines)
+                    LogStatus("NUMERIC trace limit reached (" + MaxNumericLogLines + "); suppressing further numerical lines this session.");
+            }
+            catch (Exception ex)
+            {
+                // Logging is diagnostic only; never let a readout change game logic.
+                if (!reportedNumericReadError)
+                {
+                    reportedNumericReadError = true;
+                    LogFailure("numerical affinity readout failed; patch behavior unchanged: " + ex);
+                }
+            }
         }
 
         private static bool IsProtectedPair(DataUnit.RelationData relation, string otherId)
