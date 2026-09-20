@@ -1,24 +1,24 @@
-# Gameplay test: positive affinity remains available
+# Gameplay test: positive-affinity notification observed
 
-Date: September 20, 2026. Source: user's screenshots and report in chat (do not publish private saves or screenshots).
+Date: September 20, 2026. Source: user's screenshots and corrections in chat (do not publish private saves or screenshots).
 
-## Setup
+## Setup and correction
 
-- Standalone MelonLoader affinity mod installed; previous test confirmed `AddIntim` and `SetIntim` Harmony patches initialized.
-- Ning Yue was already at maximum affinity, so she was unsuitable for detecting a gain. User switched to Yin'er.
-- The Marked screen showed Yin'er with a visible value of **380** before the gift test. Note: this value appears under the eye icon; do not assume it is the exact raw bidirectional affinity field without further verification.
+- Standalone MelonLoader affinity mod installed; a previous test confirmed `AddIntim` and `SetIntim` Harmony patches initialized.
+- Ning Yue was already at maximum affinity, so she was unsuitable for detecting an increase. User switched to Yin'er.
+- **Correction:** The `380` shown beneath Yin'er's portrait on the game's **Marked** screen is a **Focus cost for marking/tracking the character's location**, according to the user. It is **not an affinity reading**. Our earlier note and chat message that treated 380 as starting affinity were incorrect. The screen also has a `Max Focus` meter. Do not use that number as an affinity baseline or compare it against affinity values.
 
 ## Action and observation
 
-The user offered Yin'er **Star's Powerful Mindbender Fist*1**. The subsequent screenshot displayed a green **"Yin'er Affinity ↑"** notification. This is positive evidence that an increase-producing interaction still fires while the protection mod is installed; it is consistent with the intended pass-through of positive deltas.
+The user offered Yin'er **Star's Powerful Mindbender Fist ×1**. A subsequent screenshot displayed a green **"Yin'er Affinity ↑"** notification. This supports that the positive-affinity interaction was triggered while the protection mod was installed; it is consistent with the intended pass-through of positive changes.
 
-**Limit:** No numerical before/after reading of the *same affinity field* is available, and the heart display can hide small changes. Record as **UI positive-affinity event observed**, not as proof of an exact numerical increase or both-direction behavior. No new log of this specific gift was supplied.
+**Limit:** Neither a valid numerical affinity baseline nor a numerical after-value was supplied. A notification alone does not establish the exact amount added, that a gain persisted after save/reload, or that both affinity directions increased. Record this as **positive-affinity UI notification observed**, not as a numeric gain confirmed.
 
 ## Remaining checks
 
-1. Record an unambiguous numerical before/after value for a partner's affinity if possible; verify positive gains are actually persisted across a save/reload.
-2. Using only an expendable backup save, trigger a negative interaction with an **unrelated NPC** and confirm its affinity still falls normally. Other mods can interfere; avoid changing the main save.
-3. Test normal month/year transitions for an existing spouse and cultivation partner, in both affinity directions where observable.
-4. Verify relationship removal/breakups are not blocked, and note the known fractional `SetIntim` limitation (`GetIntim` returns `int` while the setter stores `float`).
+1. If the game or an inspection tool provides an unambiguous numeric affinity field, compare the same field before and after a positive interaction, and check persistence after save/reload on a backup save. Do not use the Marked screen's Focus costs.
+2. Using only an expendable backup save, trigger a negative interaction with an **unrelated NPC** and check whether their affinity still falls normally; other mods may interfere.
+3. Test normal month/year transitions for a current spouse and cultivation partner, in both directions where values can be observed.
+4. Verify that relationship removal/breakups are not blocked, and address the known fractional `SetIntim` limitation (`GetIntim` returns `int` but the setter receives `float`).
 
-Current status: the earlier Ning Yue attack produced one blocked negative `AddIntim`, two clamped decreasing `SetIntim`, and no *visible* reduction in her displayed affinity. The Yin'er gift subsequently produced a positive-affinity UI indicator. These are promising targeted tests, not comprehensive verification.
+Current status: an earlier Ning Yue attack coincided with one blocked negative `AddIntim`, two clamped decreasing `SetIntim`, and no *visible* reduction in her displayed affinity. The Yin'er gift subsequently produced a positive-affinity UI indicator. These are targeted but incomplete tests; no exact numerical affinity increase has been verified.
