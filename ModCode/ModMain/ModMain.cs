@@ -10,8 +10,9 @@ namespace MOD_Rk7Qp2
     public class ModMain
     {
         private const string HarmonyId = "MakRatanakKh.TaleOfImmortal.AffinityProtection";
-        // Diagnostics are for testing; this is a cap per game session, not per NPC.
-        private const int MaxNumericLogLines = 120;
+        // Prioritize protected relationships: unrelated NPC events exhausted the old
+        // 120-line cap during a single month rollover. Logging does not alter patches.
+        private const int MaxNumericLogLines = 240;
         // The game also exposes a namespace named Harmony; qualify the class to avoid CS0118.
         private static HarmonyLib.Harmony harmony;
         private static int blockedAdd;
@@ -25,7 +26,7 @@ namespace MOD_Rk7Qp2
             // Must run before reflection or patch setup. In-game mod logging is not
             // guaranteed to appear in Player.log or MelonLoader/Latest.log, so also
             // write a best-effort diagnostic to the user's temporary directory.
-            LogStatus("Init ENTERED (numeric affinity diagnostic build 0.2.1-test)");
+            LogStatus("Init ENTERED (protected-pair numeric diagnostic build 0.2.2-test)");
             try
             {
                 InitializePatches();
@@ -77,7 +78,7 @@ namespace MOD_Rk7Qp2
                 harmony = candidate;
                 LogStatus("patched " + add.DeclaringType.FullName + "." + add.Name + "(" + string.Join(", ", Array.ConvertAll(add.GetParameters(), p => p.ParameterType.Name)) + ")");
                 LogStatus("patched " + set.DeclaringType.FullName + "." + set.Name + "(" + string.Join(", ", Array.ConvertAll(set.GetParameters(), p => p.ParameterType.Name)) + ")");
-                LogStatus("numeric diagnostics enabled: player-related writes only; GetIntim returns integer values, not raw float affinity; maximum " + MaxNumericLogLines + " lines per session.");
+                LogStatus("numeric diagnostics: PROTECTED spouse/partner pairs only, on intercepted writes; GetIntim returns integer values rather than raw float affinity; maximum " + MaxNumericLogLines + " numeric lines per session.");
                 LogStatus("startup patch installation complete; confirm behavior using a backup save.");
             }
             catch (Exception error)
@@ -149,13 +150,17 @@ namespace MOD_Rk7Qp2
             TraceIntegerAffinity(__instance, unitID, "SetIntim AFTER");
         }
 
-        // Read only the relationship record involved in this write, only if exactly
-        // one endpoint is the player. This includes unrelated NPCs interacting with
-        // the player, making it possible to compare protected vs unprotected writes.
+        // Limit detailed traces to actual CURRENT protected pairs. Filtering on
+        // relationship rather than all NPC->player writes prevents unrelated world
+        // events from exhausting the quota before later month/year transitions.
         // GetIntim is an int getter: do NOT label this the exact stored float value.
         private static void TraceIntegerAffinity(DataUnit.RelationData relation, string otherId, string action)
         {
             if (numericLogLines >= MaxNumericLogLines || relation == null || string.IsNullOrEmpty(otherId))
+                return;
+            // Diagnostic-only filter: intentionally does not change the decisions in
+            // AddIntimPrefix/SetIntimPrefix. Errors fail open in IsProtectedPair.
+            if (!IsProtectedPair(relation, otherId))
                 return;
             try
             {
@@ -177,9 +182,9 @@ namespace MOD_Rk7Qp2
                 string direction = ownerIsPlayer ? "player->NPC" : "NPC->player";
                 string npcId = ownerIsPlayer ? otherId : ownerId;
                 numericLogLines++;
-                LogStatus("NUMERIC " + action + "; direction=" + direction + "; npcId=" + npcId + "; GetIntim(int)=" + integerAffinity);
+                LogStatus("NUMERIC PROTECTED " + action + "; direction=" + direction + "; npcId=" + npcId + "; GetIntim(int)=" + integerAffinity);
                 if (numericLogLines == MaxNumericLogLines)
-                    LogStatus("NUMERIC trace limit reached (" + MaxNumericLogLines + "); suppressing further numerical lines this session.");
+                    LogStatus("NUMERIC trace limit reached (" + MaxNumericLogLines + "); suppressing further numerical lines this session. Blocking counters remain active.");
             }
             catch (Exception ex)
             {
