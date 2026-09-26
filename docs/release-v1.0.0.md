@@ -6,7 +6,7 @@ First combined release of the Tale of Immortal affinity-protection mods.
 
 ### Partner Affinity Protection v0.2.4
 
-`AffinityProtectionStandalone.dll`
+`PartnerAffinityProtection.dll`
 
 Protects affinity between the player and their current spouse/cultivation partners.
 
