@@ -41,14 +41,43 @@ Copy-Item `
 
 Partner Affinity Protection can remain installed; the mods use separate Harmony IDs and relationship filters.
 
-## First test
+## Verified gameplay test — 2026-09-26
 
-Use a backup save.
+The first runtime Master-filter test passed.
 
-1. Start the game and load a save where the player currently has a Master.
-2. Perform an action that normally lowers the Master's affinity toward the player, or the player's affinity toward the Master.
-3. Exit the game.
-4. Inspect:
+Test context:
+
+- player attacked their current Master twice;
+- no visible affinity-loss notification was observed;
+- the Master's heart display remained unchanged;
+- MelonLoader identified the relation as the current Master and logged protected writes.
+
+Observed raw affinity:
+
+```text
+MASTER->player current raw = 279.81
+requested decrease        = 276.25
+passed value              = 279.81
+post-write raw            = 279.81
+
+MASTER->player current raw = 279.81
+requested decrease        = 279
+passed value              = 279.81
+post-write raw            = 279.81
+```
+
+The same two decrease attempts were observed again after the second attack and were blocked identically.
+
+This confirms:
+
+- `UnitRelationType.Master` is recognized correctly at runtime for this save;
+- Master -> player affinity decreases are blocked;
+- the raw fractional value is preserved rather than rounded to the integer getter;
+- the standalone DLL can coexist with Partner Affinity Protection during this test.
+
+The reverse direction, player -> Master, has not yet been directly exercised in gameplay.
+
+## Useful log command
 
 ```powershell
 $log = Join-Path $gameDir 'MelonLoader\Latest.log'
@@ -57,8 +86,6 @@ Select-String -Path $log `
   -Context 0,1
 ```
 
-A successful protection event should show `AddIntim BLOCKED` or `SetIntim DECAY BLOCKED` and an unchanged post-write raw value.
-
 ## Status
 
-`0.1.0-test`: implementation prepared from the gameplay-tested Partner Affinity Protection logic. The Master relationship filter itself still requires in-game verification.
+`0.1.0-test`: Master -> player affinity protection is gameplay-verified. Reverse-direction behavior remains to be tested before removing the test suffix.
