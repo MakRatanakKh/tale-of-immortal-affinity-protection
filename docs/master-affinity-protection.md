@@ -88,4 +88,4 @@ Select-String -Path $log `
 
 ## Status
 
-`0.1.0-test`: Master -> player affinity protection is gameplay-verified. Reverse-direction behavior remains to be tested before removing the test suffix.
+`0.1.0`: Master -> player affinity protection is gameplay-verified. The mod is suitable for normal use based on the tested path; reverse-direction behavior has not yet been directly exercised in gameplay.
