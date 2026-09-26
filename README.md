@@ -9,7 +9,7 @@ MelonLoader mods for **Tale of Immortal / 鬼谷八荒** that prevent affinity l
 File:
 
 ```text
-AffinityProtectionStandalone.dll
+PartnerAffinityProtection.dll
 ```
 
 Protects affinity between the player and current:
@@ -58,7 +58,7 @@ Other game or MelonLoader versions may work, but they have not been verified by 
 For Partner protection:
 
 ```text
-AffinityProtectionStandalone.dll
+PartnerAffinityProtection.dll
 ```
 
 For Master protection:
@@ -144,7 +144,7 @@ dotnet build .\tools\AffinityStandalone\AffinityStandalone.csproj -c Release
 Output:
 
 ```text
-tools\AffinityStandalone\bin\Release\net6.0\AffinityProtectionStandalone.dll
+tools\AffinityStandalone\bin\Release\net6.0\PartnerAffinityProtection.dll
 ```
 
 ### Master Affinity Protection
