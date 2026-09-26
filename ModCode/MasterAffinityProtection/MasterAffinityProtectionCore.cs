@@ -24,7 +24,7 @@ namespace MasterAffinityProtection
 
         public void Init()
         {
-            LogStatus("Init ENTERED (master affinity protection 0.1.0-test)");
+            LogStatus("Init ENTERED (master affinity protection 0.1.0)");
             try { InitializePatches(); }
             catch (Exception error) { LogFailure("unhandled Init exception: " + error); }
         }
