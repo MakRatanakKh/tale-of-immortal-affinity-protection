@@ -1,34 +1,184 @@
-# Tale of Immortal — Partner Affinity Protection
+# Tale of Immortal — Affinity Protection Mods
 
-**Status (September 20, 2026): v0.2.4, tested for personal gameplay.** The standalone MelonLoader mod has passed 13 cap-policy checks and several user gameplay scenarios: loading and patch installation, blocking partner affinity losses, allowing gains, leaving unrelated NPC affinity changes intact in an observed test, respecting the 300 affinity cap, and saving/reloading after partner interactions and month skipping. This does not prove all gameplay events or both affinity directions are covered, nor that the earlier reported crashes were caused by the previous over-cap bug. Keep save backups.
+MelonLoader mods for **Tale of Immortal / 鬼谷八荒** that prevent affinity loss for selected player relationships while still allowing affinity gains and respecting the game's normal affinity cap.
 
-Goal: prevent decreases in affinity in either direction between the player and their current spouse or cultivation partners (道侣), while permitting increases and leaving unrelated NPC relations unchanged.
+## Included mods
 
-## Installation and build
+### Partner Affinity Protection v0.2.4
 
-Use the **standalone MelonLoader** mod, not the earlier in-game Local Mods package. The old Local Mods affinity package should remain disabled/removed so the Harmony patches are not installed twice.
+File:
 
-1. Copy `ModCode/Local.props.example` to `ModCode/Local.props` and configure `GameDir` for your installation (this local file is not committed).
-2. Close the game and back up your saves and currently installed mod DLL.
-3. Run `dotnet run --project ./tools/AffinityCapTests/AffinityCapTests.csproj -c Release` and `dotnet build ./tools/AffinityStandalone/AffinityStandalone.csproj -c Release`.
-4. Copy `tools/AffinityStandalone/bin/Release/net6.0/AffinityProtectionStandalone.dll` into `<GameDir>/Mods/` and restart the game.
+```text
+AffinityProtectionStandalone.dll
+```
 
-The optional `AffinityLoaderProbe.dll` was used to diagnose MelonLoader startup; it is not required for gameplay and can be removed from the `Mods` folder while the game is closed.
+Protects affinity between the player and current:
 
-## What v0.2.4 does
+- spouse (`Married`);
+- cultivation partners (`Lover` / 道侣).
 
-- Harmony-patches `DataUnit.RelationData.AddIntim` and `SetIntim` for current player `Married`/`Lover` relationships.
-- Blocks negative deltas for protected relationships, and prevents below-current absolute writes using raw floating-point affinity when a plausible validated read is available (integer fallback otherwise).
-- Limits protected affinity to 300 and allows existing above-cap affinity to normalize to 300. Preserves fractional values below the cap when validated raw affinity is available.
-- Leaves unrelated NPC relationships and `ClearIntim` unpatched so the game's relationship-removal behavior remains game-controlled.
-- Logs `DECAY BLOCKED`, `CAP NORMALIZED`, and `CAP LIMITED` in MelonLoader's `Latest.log` for diagnosis.
+### Master Affinity Protection v0.1.0
 
-## Verification and limitations
+File:
 
-- The user's v0.2.4 tests confirmed raw affinity normalizing from 302 to 300, attempted decreases to 296.25 and 299 being blocked at 300, and additional above-cap requests being limited to 300 in the **NPC → player** direction. A session including attacking a partner, gifting a manual, skipping several months, closing the game, and reloading the save completed without a reported crash.
-- The opposite **player → NPC** direction, all NPC/event combinations, and longer-term stability have not been exhaustively tested. The raw-field plausibility check is not a guarantee for every game version, and the fallback getter may lose fractional precision. A previous game crash was reported during max-affinity interactions, but its root cause is unconfirmed.
-- If the game crashes, preserve `MelonLoader/Latest.log` and the game's `Player.log` before restarting. Do not post private saves or logs to this public repository. Keep backup saves when updating the game or the mod.
+```text
+MasterAffinityProtection.dll
+```
 
-Additional records: [300-cap investigation](docs/affinity-300-cap-investigation.md), [fractional precision test](docs/fractional-precision-test.md), and [assembly findings](docs/assembly-findings.md).
+Protects affinity between the player and their current:
 
-Do not commit game DLLs, private saves, local configuration paths, or private logs.
+- Master (`UnitRelationType.Master`).
+
+The two mods are independent and can be installed together.
+
+## Tested environment
+
+These versions were tested on:
+
+- **Game:** Tale of Immortal / 鬼谷八荒, Steam App ID `1468810`
+- **Steam public branch Build ID:** `21758240`
+- **Executable:** `guigubahuang.exe`
+- **Executable Product/File Version:** `2020.3.9.15689012` (Unity player/file version; not the Steam build number)
+- **MelonLoader:** `0.7.3 Open-Beta`
+- **Platform:** Windows
+
+Other game or MelonLoader versions may work, but they have not been verified by this project.
+
+## Installation
+
+1. Install MelonLoader for Tale of Immortal.
+2. Close the game.
+3. Back up your save files before installing or updating mods.
+4. Copy the DLL(s) you want into:
+
+```text
+<Tale of Immortal>\Mods\
+```
+
+For Partner protection:
+
+```text
+AffinityProtectionStandalone.dll
+```
+
+For Master protection:
+
+```text
+MasterAffinityProtection.dll
+```
+
+You may install both at the same time.
+
+The old in-game Local Mods affinity package, if you created or imported one during development, should remain disabled or removed so the same protection logic is not installed twice.
+
+The old diagnostic `AffinityLoaderProbe.dll` is not required and should not be installed for normal gameplay.
+
+## What the mods do
+
+Both mods use the same protection strategy:
+
+- Harmony-patch `DataUnit.RelationData.AddIntim` and `SetIntim`.
+- Block negative affinity changes for the relationship type handled by that mod.
+- Allow positive affinity changes.
+- Preserve raw fractional affinity when the game's float value can be safely validated.
+- Respect the normal maximum affinity of `300`.
+- Allow existing above-cap values to normalize back to `300`.
+- Leave unrelated NPC relationships unchanged.
+- Leave `ClearIntim` unpatched so actual relationship removal remains game-controlled.
+- Write diagnostic information to `MelonLoader/Latest.log`.
+
+## Gameplay verification
+
+### Partner Affinity Protection v0.2.4
+
+Gameplay testing confirmed:
+
+- negative partner-affinity writes being blocked;
+- positive affinity changes still occurring;
+- unrelated NPC affinity changes remaining possible in observed tests;
+- fractional affinity preservation;
+- affinity values being capped/normalized to `300`;
+- month-skipping affinity-loss events being intercepted;
+- a save being closed and reloaded successfully after partner interactions and month skipping.
+
+The tested numerical path was primarily **NPC → player**. Not every possible game event or both directions have been exhaustively tested.
+
+### Master Affinity Protection v0.1.0
+
+Gameplay testing confirmed the player's current Master being recognized at runtime.
+
+During two attacks on the Master, the game attempted to reduce **Master → player** affinity from a raw value of `279.81` to `276.25` and `279`. Both writes were blocked, and the post-write raw affinity remained `279.81`.
+
+The reverse **player → Master** direction has not yet been directly exercised in gameplay, although it uses the same shared protection strategy.
+
+## Building from source
+
+Create:
+
+```text
+ModCode\Local.props
+```
+
+from:
+
+```text
+ModCode\Local.props.example
+```
+
+and set `GameDir` to your Tale of Immortal installation.
+
+### Partner Affinity Protection
+
+Run the cap-policy checks:
+
+```powershell
+dotnet run --project .\tools\AffinityCapTests\AffinityCapTests.csproj -c Release
+```
+
+Build:
+
+```powershell
+dotnet build .\tools\AffinityStandalone\AffinityStandalone.csproj -c Release
+```
+
+Output:
+
+```text
+tools\AffinityStandalone\bin\Release\net6.0\AffinityProtectionStandalone.dll
+```
+
+### Master Affinity Protection
+
+Build:
+
+```powershell
+dotnet build .\tools\MasterAffinityStandalone\MasterAffinityStandalone.csproj -c Release
+```
+
+Output:
+
+```text
+tools\MasterAffinityStandalone\bin\Release\net6.0\MasterAffinityProtection.dll
+```
+
+## Troubleshooting
+
+If the game crashes or behaves unexpectedly:
+
+1. close the game;
+2. preserve `MelonLoader/Latest.log` and the game's `Player.log` before restarting;
+3. temporarily remove the affinity-protection DLLs from `Mods`;
+4. test with a backup save.
+
+Game updates can change internal methods or data layouts, so re-check the logs after major Tale of Immortal updates.
+
+## Development notes
+
+Additional investigation and test records are available in `docs/`, including:
+
+- [300-cap investigation](docs/affinity-300-cap-investigation.md)
+- [fractional precision test](docs/fractional-precision-test.md)
+- [assembly findings](docs/assembly-findings.md)
+- [Master Affinity Protection verification](docs/master-affinity-protection.md)
+
+Do not commit or redistribute game DLLs, private saves, local configuration paths, or private logs.
