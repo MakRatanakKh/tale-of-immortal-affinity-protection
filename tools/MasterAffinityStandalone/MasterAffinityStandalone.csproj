@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <AssemblyName>MasterAffinityProtection</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="../../ModCode/MasterAffinityProtection/MasterAffinityProtectionCore.cs" Link="Shared/MasterAffinityProtectionCore.cs" />
+    <Compile Include="../../ModCode/ModMain/AffinityCapPolicy.cs" Link="Shared/AffinityCapPolicy.cs" />
+  </ItemGroup>
+
+  <Import Project="../../ModCode/Local.props" Condition="Exists('../../ModCode/Local.props')" />
+
+  <PropertyGroup>
+    <GameAssemblyDir>$(GameDir)/MelonLoader/Managed</GameAssemblyDir>
+    <GameAssemblyDir Condition="!Exists('$(GameAssemblyDir)/Assembly-CSharp.dll')">$(GameDir)/MelonLoader/Il2CppAssemblies</GameAssemblyDir>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(GameDir)' != ''">
+    <_MelonLoaderDll Include="$(GameDir)/MelonLoader/**/MelonLoader.dll" />
+    <_HarmonyDll Include="$(GameDir)/MelonLoader/**/0Harmony.dll;$(GameDir)/MelonLoader/**/HarmonyLib.dll;$(GameDir)/MelonLoader/**/HarmonyX.dll" />
+    <_Il2CppMscorlib Include="$(GameAssemblyDir)/Il2Cppmscorlib.dll" Condition="Exists('$(GameAssemblyDir)/Il2Cppmscorlib.dll')" />
+    <_Il2CppMscorlib Include="$(GameDir)/MelonLoader/**/Il2Cppmscorlib.dll" Condition="'@(_Il2CppMscorlib)' == ''" />
+    <_Il2CppInteropRuntime Include="$(GameAssemblyDir)/Il2CppInterop.Runtime.dll" Condition="Exists('$(GameAssemblyDir)/Il2CppInterop.Runtime.dll')" />
+    <_Il2CppInteropRuntime Include="$(GameDir)/MelonLoader/**/Il2CppInterop.Runtime.dll" Condition="'@(_Il2CppInteropRuntime)' == ''" />
+
+    <Reference Include="$(GameAssemblyDir)/Assembly-CSharp*.dll"><Private>false</Private></Reference>
+    <Reference Include="@(_MelonLoaderDll)"><Private>false</Private></Reference>
+    <Reference Include="@(_HarmonyDll)"><Private>false</Private></Reference>
+    <Reference Include="@(_Il2CppMscorlib)"><Private>false</Private></Reference>
+    <Reference Include="@(_Il2CppInteropRuntime)"><Private>false</Private></Reference>
+    <Reference Include="$(GameDir)/MelonLoader/Managed/Il2Cpp*.dll"><Private>false</Private></Reference>
+    <Reference Include="$(GameDir)/MelonLoader/Managed/Unhollower*.dll"><Private>false</Private></Reference>
+    <Reference Include="$(GameDir)/MelonLoader/Managed/Unity*.dll"><Private>false</Private></Reference>
+  </ItemGroup>
+
+  <Target Name="CheckMasterAffinityReferences" BeforeTargets="ResolveReferences">
+    <Error Condition="'$(GameDir)' == ''" Text="Configure GameDir in ModCode/Local.props before building Master Affinity Protection." />
+    <Error Condition="'$(GameDir)' != '' And !Exists('$(GameAssemblyDir)/Assembly-CSharp.dll')" Text="Assembly-CSharp.dll not found under MelonLoader/Managed or Il2CppAssemblies." />
+    <Error Condition="'$(GameDir)' != '' And '@(_MelonLoaderDll)' == ''" Text="MelonLoader.dll not found under GameDir/MelonLoader." />
+    <Error Condition="'$(GameDir)' != '' And '@(_HarmonyDll)' == ''" Text="Harmony DLL not found under GameDir/MelonLoader." />
+    <Error Condition="'$(GameDir)' != '' And '@(_Il2CppMscorlib)' == ''" Text="Il2Cppmscorlib.dll not found under GameDir/MelonLoader." />
+    <Error Condition="'$(GameDir)' != '' And '@(_Il2CppInteropRuntime)' == ''" Text="Il2CppInterop.Runtime.dll not found under GameDir/MelonLoader." />
+  </Target>
+</Project>
